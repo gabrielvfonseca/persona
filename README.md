@@ -9,7 +9,6 @@ app that uses them.
 | Package | What it does |
 |---|---|
 | [`@persona/persona`](packages/persona) | Main SDK: `createPersona()` builds a bot from a persona, a model and a channel. |
-| [`@persona/training`](packages/training) | Learns a persona from a chat export. |
 | [`@persona/schemas`](packages/schemas) | The persona file format. |
 | [`@persona/memory`](packages/memory) | History, memory nodes, search index, dedupe, rate limits. |
 | [`@persona/policy`](packages/policy) | When to answer, and admin commands. |

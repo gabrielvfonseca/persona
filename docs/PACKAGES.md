@@ -10,7 +10,6 @@ depends only on the packages below it in this table.
 | `@persona/policy` | Who the bot answers and which admin commands run. | core |
 | `@persona/memory` | Chat history, memory nodes, search index, dedupe, rate limits. | core |
 | `@persona/persona` | **Main SDK.** Builds a bot from a persona, a model and a channel. | core, schemas, policy, memory |
-| `@persona/training` | Learns a persona from a chat export. | schemas |
 | `@persona/whatsapp` | WhatsApp transports: Cloud API (`/cloud`) and linked device (`/baileys`). | core, zod, @openchannelprotocol/sdk, baileys |
 | `@persona/kv` | Key-value storage: history, dedupe, rate limits, pause state. | core |
 
@@ -77,7 +76,6 @@ Memory is in-process. Persist it by passing your own `HistoryStore` (see `exampl
 | `mentionsName(text, name)` | The name matcher on its own. |
 | `createCommands(opts)` | `!whois` (anyone), `!pause` and `!resume` (admins). |
 
-## @persona/training
 
 | Export | Purpose |
 |---|---|

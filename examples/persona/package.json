@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "bot": "bun src/node.ts",
-    "ingest": "bun scripts/ingest.ts",
     "simulate": "bun scripts/simulate.ts",
     "groups": "bun scripts/groups.ts",
     "check": "biome check",
@@ -23,7 +22,6 @@
     "@persona/persona": "workspace:*",
     "@persona/policy": "workspace:*",
     "@persona/schemas": "workspace:*",
-    "@persona/training": "workspace:*",
     "@persona/whatsapp": "workspace:*",
     "ai": "^7.0.156",
     "hono": "^4.13.14",

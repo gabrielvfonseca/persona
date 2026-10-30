@@ -17,7 +17,7 @@ puts them together. Transports and model providers plug in through ports defined
                         ┌───────────▼───────────┐
                         │ @persona/core         │
                         └───────────▲───────────┘
-          @persona/whatsapp (cloud, baileys)   @persona/kv   @persona/training
+          @persona/whatsapp (cloud, baileys)   @persona/kv
 ```
 
 ## The Pipeline
@@ -58,7 +58,6 @@ generate → transforms → empty check → guards → send → history
 | `policy` | `core` |
 | `memory` | `core` |
 | `persona` | `core`, `schemas`, `policy`, `memory` |
-| `training` | `schemas` |
 | `whatsapp` | `core`, zod, `@openchannelprotocol/sdk`, `baileys` (`/baileys` only) |
 | `kv` | `core` |
 | `examples/*` | anything, including model providers and Hono |
