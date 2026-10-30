@@ -1,0 +1,11 @@
+{
+  "$schema": "https://changesets.github.io/schema",
+  "changelog": ["@changesets/changelog-github", { "repo": "gabrielvfonseca/persona-bot" }],
+  "commit": false,
+  "fixed": [],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}

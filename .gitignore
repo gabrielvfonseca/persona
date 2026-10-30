@@ -1,0 +1,16 @@
+node_modules/
+.DS_Store
+data/.DS_Store
+*.lock
+.env
+
+# Data
+**/data/*
+!**/data/.gitkeep
+!**/data/persona.example.json
+**/.auth/
+.env*
+!.env.example
+
+# Turbo
+.turbo

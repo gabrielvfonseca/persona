@@ -1,0 +1,26 @@
+{
+  "name": "@persona/policy",
+  "version": "0.1.0",
+  "description": "Who the bot answers, and which admin commands it accepts",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "biome check",
+    "lint": "biome check"
+  },
+  "dependencies": {
+    "@persona/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

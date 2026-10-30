@@ -1,0 +1,12 @@
+# Docker Compose for local development (linked-device bot)
+services:
+  persona-bot:
+    build:
+      context: ..
+      dockerfile: apps/persona/Dockerfile
+    env_file:
+      - ../apps/persona/.env
+    volumes:
+      - ../apps/persona/data:/app/apps/persona/data
+      - ../apps/persona/.auth:/app/apps/persona/.auth
+    restart: unless-stopped

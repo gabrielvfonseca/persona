@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "Ana",
+  "styleGuide": "Short, warm and casual. Lowercase is fine. Uses one emoji at most.",
+  "languageHint": "pt-BR",
+  "stats": { "medianLen": 18, "p90Len": 52, "messageCount": 1200 },
+  "quotes": [
+    "haha sim, bora",
+    "amanhã eu te falo",
+    "kkkk não acredito",
+    "tô chegando em 10 min",
+    "bom dia! tudo bem por aí?"
+  ],
+  "phrases": ["bora", "kkkk"],
+  "facts": ["Lives in São Paulo.", "Likes coffee in the morning."]
+}

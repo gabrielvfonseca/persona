@@ -1,0 +1,33 @@
+{
+  "name": "@persona/whatsapp",
+  "version": "0.1.0",
+  "description": "WhatsApp transports: Cloud API webhook (cloud) and linked device via Baileys (baileys)",
+  "type": "module",
+  "exports": {
+    "./cloud": "./src/cloud/index.ts",
+    "./baileys": "./src/baileys/index.ts",
+    "./baileys/node": "./src/baileys/node.ts",
+    "./baileys/ws-shim": "./src/baileys/ws-shim.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "biome check",
+    "lint": "biome check"
+  },
+  "dependencies": {
+    "@openchannelprotocol/sdk": "0.1.0",
+    "@persona/core": "workspace:*",
+    "baileys": "7.0.0-rc14",
+    "qrcode-terminal": "^0.12.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
+    "@cloudflare/workers-types": "^5.20261029.1",
+    "@types/node": "^26.6.6",
+    "@types/qrcode-terminal": "^0.12.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

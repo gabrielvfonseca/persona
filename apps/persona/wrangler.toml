@@ -1,0 +1,25 @@
+name = "persona-bot"
+main = "src/worker.ts"
+compatibility_date = "2026-10-29"
+compatibility_flags = ["nodejs_compat"]
+
+# Baileys' `ws` dependency is replaced by a fetch-based WebSocket on Workers.
+[alias]
+ws = "../../packages/whatsapp/src/baileys/ws-shim.ts"
+
+# Secrets (set with `wrangler secret put`): OPENROUTER_API_KEY, PERSONA_JSON,
+# WHATSAPP_ACCESS_TOKEN, WHATSAPP_APP_SECRET, WHATSAPP_PHONE_NUMBER_ID,
+# WHATSAPP_VERIFY_TOKEN, ADMIN_KEY, PERSONA_CONSENT, PERSONA_NAME, PERSONA_MODEL.
+# No [vars] here, so dashboard values are not overwritten on deploy.
+
+[[kv_namespaces]]
+binding = "CONVERSATIONS"
+id = "175a7c257fd3417bb99db05bebcf0f3e"
+
+[[durable_objects.bindings]]
+name = "WHATSAPP"
+class_name = "WhatsAppConnection"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WhatsAppConnection"]

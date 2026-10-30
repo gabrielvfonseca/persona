@@ -1,0 +1,40 @@
+{
+  "name": "@persona/app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bot": "bun src/node.ts",
+    "ingest": "bun scripts/ingest.ts",
+    "simulate": "bun scripts/simulate.ts",
+    "groups": "bun scripts/groups.ts",
+    "check": "biome check",
+    "fix": "biome check --write",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "build": "echo \"no build step\""
+  },
+  "dependencies": {
+    "@openrouter/ai-sdk-provider": "^3.1.0",
+    "@persona/core": "workspace:*",
+    "@persona/kv": "workspace:*",
+    "@persona/memory": "workspace:*",
+    "@persona/persona": "workspace:*",
+    "@persona/policy": "workspace:*",
+    "@persona/schemas": "workspace:*",
+    "@persona/training": "workspace:*",
+    "@persona/whatsapp": "workspace:*",
+    "ai": "^7.0.156",
+    "hono": "^4.13.14",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
+    "@cloudflare/workers-types": "^5.20261029.1",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.0.0"
+  }
+}
