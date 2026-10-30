@@ -5,7 +5,7 @@ puts them together. Transports and model providers plug in through ports defined
 `@persona/core`.
 
 ```
-            ┌────────────── apps/persona (example) ──────────────┐
+            ┌────────────── examples/persona (example) ──────────────┐
             │ config · model (OpenRouter) · node.ts · worker.ts  │
             └───────────────────────┬────────────────────────────┘
                                     │ createPersona()
@@ -61,6 +61,6 @@ generate → transforms → empty check → guards → send → history
 | `training` | `schemas` |
 | `whatsapp` | `core`, zod, `@openchannelprotocol/sdk`, `baileys` (`/baileys` only) |
 | `kv` | `core` |
-| `apps/*` | anything, including model providers and Hono |
+| `examples/*` | anything, including model providers and Hono |
 
-Only `apps/*` may import a model provider (`ai`, `@openrouter/ai-sdk-provider`) or Hono.
+Only `examples/*` may import a model provider (`ai`, `@openrouter/ai-sdk-provider`) or Hono.

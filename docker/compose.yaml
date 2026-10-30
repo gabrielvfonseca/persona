@@ -3,10 +3,10 @@ services:
   persona-bot:
     build:
       context: ..
-      dockerfile: apps/persona/Dockerfile
+      dockerfile: examples/persona/Dockerfile
     env_file:
-      - ../apps/persona/.env
+      - ../examples/persona/.env
     volumes:
-      - ../apps/persona/data:/app/apps/persona/data
-      - ../apps/persona/.auth:/app/apps/persona/.auth
+      - ../examples/persona/data:/app/examples/persona/data
+      - ../examples/persona/.auth:/app/examples/persona/.auth
     restart: unless-stopped

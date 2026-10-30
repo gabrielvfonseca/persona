@@ -1,7 +1,7 @@
 # persona
 
 A toolkit for building a WhatsApp bot that learns a personality from chat exports and
-replies in that voice. The SDK is split into small packages; `apps/persona` is an example
+replies in that voice. The SDK is split into small packages; `examples/persona` is an example
 app that uses them.
 
 ## Packages
@@ -24,20 +24,20 @@ bun install
 bun run test
 
 # 1. Learn a persona from an export (who has the most messages?)
-bun run --cwd apps/persona ingest path/to/export.txt --list
-bun run --cwd apps/persona ingest path/to/export.txt --person "Name"
+bun run --cwd examples/persona ingest path/to/export.txt --list
+bun run --cwd examples/persona ingest path/to/export.txt --person "Name"
 
 # 2. Try it offline with a fake model
-bun run --cwd apps/persona simulate
+bun run --cwd examples/persona simulate
 
-# 3. Run it for real (see apps/persona/.env.example)
-bun run --cwd apps/persona bot
+# 3. Run it for real (see examples/persona/.env.example)
+bun run --cwd examples/persona bot
 ```
 
 ## Train the bot
 
 ```bash
-cd apps/persona
+cd examples/persona
 bun run ingest export.txt --person "Name" --name "Display"      # quotes and example exchanges
 bun run ingest export.txt --person "Name" --fact "Works as a nurse"   # add facts, repeatable
 bun run ingest export.txt --person "Name" --facts facts.txt          # one fact per line
@@ -62,7 +62,7 @@ const bot = createPersona({
 await bot.handle({ id: "msg-1", chatId: "chat-1", text: "hi" });
 ```
 
-`apps/persona/src/bot.ts` shows the same thing with a real model and transport.
+`examples/persona/src/bot.ts` shows the same thing with a real model and transport.
 
 ## Docs
 

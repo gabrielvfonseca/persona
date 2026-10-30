@@ -1,13 +1,13 @@
 # Deploying the linked-device bot (Baileys)
 
-`apps/persona/src/node.ts` is a long-running process that keeps a WhatsApp Web session
+`examples/persona/src/node.ts` is a long-running process that keeps a WhatsApp Web session
 open. It cannot run on Cloudflare Workers, so run it in a container on a host with a
 persistent disk. For the Workers deployment, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 Only ever run **one** instance per WhatsApp account. Two instances sharing the same
 `.auth/` directory will fight over the session.
 
-Persistent state, relative to `apps/persona/` inside the container:
+Persistent state, relative to `examples/persona/` inside the container:
 
 - `.auth/` holds the WhatsApp session credentials. Treat it like a password.
 - `data/persona.json` is the persona file built by `bun run ingest`.
@@ -35,7 +35,7 @@ Merge to `main` first, then:
 ```bash
 git clone https://github.com/gabrielvfonseca/persona-bot.git /opt/persona
 cd /opt/persona
-mkdir -p apps/persona/.auth apps/persona/data
+mkdir -p examples/persona/.auth examples/persona/data
 ```
 
 ## 4. Build the persona (run on your laptop)
@@ -43,10 +43,10 @@ mkdir -p apps/persona/.auth apps/persona/data
 `data/` is gitignored, so build the persona locally and copy it over.
 
 ```bash
-cd apps/persona
+cd examples/persona
 bun run ingest path/to/export.txt --list                # find the sender's exact name
 bun run ingest path/to/export.txt --person "Name" --name "Display name"
-scp data/persona.json root@<VPS_IP>:/opt/persona/apps/persona/data/persona.json
+scp data/persona.json root@<VPS_IP>:/opt/persona/examples/persona/data/persona.json
 ```
 
 Re-running `ingest` keeps hand-written `styleGuide`, `phrases`, `facts` and `languageHint`.
@@ -61,7 +61,7 @@ touch /opt/persona/prod.env && chmod 600 /opt/persona/prod.env
 ```
 
 Fill it in. The variables are listed in
-[apps/persona/.env.example](apps/persona/.env.example). The linked device needs only these:
+[examples/persona/.env.example](examples/persona/.env.example). The linked device needs only these:
 
 ```env
 PERSONA_CONSENT=true
@@ -75,11 +75,11 @@ MAX_PER_10MIN=5
 
 ## 6. Build the image
 
-Build from the repository root, because the workspace packages live outside `apps/persona`:
+Build from the repository root, because the workspace packages live outside `examples/persona`:
 
 ```bash
 cd /opt/persona
-docker build -t persona-bot -f apps/persona/Dockerfile .
+docker build -t persona-bot -f examples/persona/Dockerfile .
 ```
 
 ## 7. Link the WhatsApp account (one time, interactive)
@@ -87,8 +87,8 @@ docker build -t persona-bot -f apps/persona/Dockerfile .
 ```bash
 docker run -it --name persona-link \
   --env-file prod.env \
-  -v /opt/persona/apps/persona/.auth:/app/apps/persona/.auth \
-  -v /opt/persona/apps/persona/data:/app/apps/persona/data \
+  -v /opt/persona/examples/persona/.auth:/app/examples/persona/.auth \
+  -v /opt/persona/examples/persona/data:/app/examples/persona/data \
   persona-bot
 ```
 
@@ -109,8 +109,8 @@ group JID to run. To list the groups it is in, use the saved session:
 
 ```bash
 docker run --rm -it --env-file prod.env \
-  -v /opt/persona/apps/persona/.auth:/app/apps/persona/.auth \
-  -v /opt/persona/apps/persona/data:/app/apps/persona/data \
+  -v /opt/persona/examples/persona/.auth:/app/examples/persona/.auth \
+  -v /opt/persona/examples/persona/data:/app/examples/persona/data \
   persona-bot bun scripts/groups.ts
 ```
 
@@ -119,8 +119,8 @@ docker run --rm -it --env-file prod.env \
 ```bash
 docker run -d --name persona --restart unless-stopped \
   --env-file /opt/persona/prod.env \
-  -v /opt/persona/apps/persona/.auth:/app/apps/persona/.auth \
-  -v /opt/persona/apps/persona/data:/app/apps/persona/data \
+  -v /opt/persona/examples/persona/.auth:/app/examples/persona/.auth \
+  -v /opt/persona/examples/persona/data:/app/examples/persona/data \
   persona-bot
 ```
 
@@ -139,12 +139,12 @@ the bot, send a message; or in a group, send `!whois`. The bot should reply.
 
 ```bash
 cd /opt/persona && git pull
-docker build -t persona-bot -f apps/persona/Dockerfile .
+docker build -t persona-bot -f examples/persona/Dockerfile .
 docker rm -f persona
 docker run -d --name persona --restart unless-stopped \
   --env-file /opt/persona/prod.env \
-  -v /opt/persona/apps/persona/.auth:/app/apps/persona/.auth \
-  -v /opt/persona/apps/persona/data:/app/apps/persona/data \
+  -v /opt/persona/examples/persona/.auth:/app/examples/persona/.auth \
+  -v /opt/persona/examples/persona/data:/app/examples/persona/data \
   persona-bot
 ```
 
@@ -153,12 +153,12 @@ The `.auth/` volume survives the update, so no re-linking is needed.
 ## Troubleshooting
 
 - **`[whatsapp] logged out`** in the logs: the device was unlinked on the phone. Stop the
-  container, delete the files in `/opt/persona/apps/persona/.auth/`, and repeat step 7.
+  container, delete the files in `/opt/persona/examples/persona/.auth/`, and repeat step 7.
 - **Bot silent in a direct chat:** check that `!pause` was not sent. Only an admin can
   pause or resume, and `ADMIN_NUMBERS` must contain exact digits.
 - **Bot silent in a group:** groups need the bot to be named or tagged.
 - **`Cannot read persona file`:** step 4 was skipped, or the file is not in
-  `apps/persona/data/persona.json` on the host.
+  `examples/persona/data/persona.json` on the host.
 - **`Invalid linked-device config`:** the log lists every missing or invalid variable.
 - **Back up `.auth/`** somewhere encrypted. Losing it means re-linking. Leaking it lets
   someone act as the account.

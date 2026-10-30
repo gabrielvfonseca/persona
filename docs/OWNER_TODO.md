@@ -11,7 +11,7 @@ Items that need a person, not code.
   `/status`. Either finish the Baileys Durable Object or remove the `/cf-bot/*` proxy.
 - **Confirm the Meta webhook** verify token matches `WHATSAPP_VERIFY_TOKEN`.
 - **Re-add the private persona fields** (`styleGuide`, `phrases`, `facts`) to
-  `apps/persona/data/persona.json` if you rebuild it with `ingest`. The ingest script
+  `examples/persona/data/persona.json` if you rebuild it with `ingest`. The ingest script
   keeps them when the file already exists, but a fresh checkout does not have them.
 - **Set the `PERSONA_JSON` secret** for the Worker before the first deploy.
 - **Worker recall is limited.** History is stored in KV, not in the node store, so semantic

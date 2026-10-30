@@ -1,17 +1,17 @@
 # Deployment reference
 
-Two ways to run the bot. Both are built from `apps/persona`.
+Two ways to run the bot. Both are built from `examples/persona`.
 
 | Transport | Runs on | Entry point | Runbook |
 |---|---|---|---|
-| Linked device (Baileys) | A VPS or any host with a persistent disk | `apps/persona/src/node.ts` | [DEPLOY.md](../DEPLOY.md) |
-| Cloud API (official webhook) | Cloudflare Workers | `apps/persona/src/worker.ts` | This page |
+| Linked device (Baileys) | A VPS or any host with a persistent disk | `examples/persona/src/node.ts` | [DEPLOY.md](../DEPLOY.md) |
+| Cloud API (official webhook) | Cloudflare Workers | `examples/persona/src/worker.ts` | This page |
 
 Only one linked-device instance may run per WhatsApp account.
 
 ## Environment variables
 
-Every variable is validated by `apps/persona/src/config.ts`. A missing or invalid value
+Every variable is validated by `examples/persona/src/config.ts`. A missing or invalid value
 stops startup and lists every problem at once.
 
 | Variable | Linked device | Cloud API | Description |
@@ -35,10 +35,10 @@ stops startup and lists every problem at once.
 
 ## Cloud API on Cloudflare Workers
 
-Deploy from `apps/persona`:
+Deploy from `examples/persona`:
 
 ```bash
-cd apps/persona
+cd examples/persona
 wrangler secret put OPENROUTER_API_KEY
 wrangler secret put PERSONA_JSON < data/persona.json
 # ...and the other secrets listed above
@@ -48,7 +48,7 @@ wrangler deploy
 `PERSONA_JSON` holds the whole persona file, so the bundle needs no data file. The Worker
 fails with a clear message if it is missing.
 
-Configuration lives in `apps/persona/wrangler.toml`:
+Configuration lives in `examples/persona/wrangler.toml`:
 
 ```toml
 name = "persona-bot"
@@ -79,6 +79,6 @@ Do not add `[vars]` to `wrangler.toml`; it would overwrite values set in the das
 ## Local checks
 
 ```bash
-bun run --cwd apps/persona simulate   # offline run with a fake model
-bunx wrangler deploy --dry-run        # from apps/persona: bundles the Worker
+bun run --cwd examples/persona simulate   # offline run with a fake model
+bunx wrangler deploy --dry-run        # from examples/persona: bundles the Worker
 ```

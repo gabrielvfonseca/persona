@@ -14,7 +14,7 @@ depends only on the packages below it in this table.
 | `@persona/whatsapp` | WhatsApp transports: Cloud API (`/cloud`) and linked device (`/baileys`). | core, zod, @openchannelprotocol/sdk, baileys |
 | `@persona/kv` | Key-value storage: history, dedupe, rate limits, pause state. | core |
 
-Example app: `apps/persona`. It is the only place that picks a model provider.
+Example app: `examples/persona`. It is the only place that picks a model provider.
 
 ## @persona/persona (the SDK)
 
@@ -67,7 +67,7 @@ Options for `createPersona`:
 | `MemoryHistoryStore` | A `HistoryStore`. Returns the last `maxTurns` (default 20); older turns stay searchable. |
 | `MemoryDedupeStore`, `FixedWindowRateLimiter`, `MemoryBotState` | In-memory stores. The limiter keeps one window per key. |
 
-Memory is in-process. Persist it by passing your own `HistoryStore` (see `apps/persona/src/worker.ts`, which uses KV).
+Memory is in-process. Persist it by passing your own `HistoryStore` (see `examples/persona/src/worker.ts`, which uses KV).
 
 ## @persona/policy
 
@@ -122,4 +122,4 @@ Workers WebSocket shim.
 ## @persona/kv
 
 `kvHistoryStore`, `kvDedupeStore`, `loadKvBotState` (pause state), `kvRateLimiter`.
-`basicAuth` lives in `apps/persona`, not in a package.
+`basicAuth` lives in `examples/persona`, not in a package.

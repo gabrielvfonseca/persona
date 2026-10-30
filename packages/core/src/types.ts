@@ -78,3 +78,67 @@ export interface Embedder {
   /** One vector per input, in input order. */
   embed(texts: readonly string[]): Promise<number[][]>;
 }
+
+/** Records one pipeline outcome for continuous learning. The SDK calls this after
+ * every handled message; implementations are fire-and-forget and must not throw. */
+export interface LearningObserver {
+  recordOutcome(input: {
+    msg: IncomingMessage;
+    result: HandleResult;
+    systemPrompt: string;
+    historyTurns: Turn[];
+    recallLines: string[];
+    replyText?: string | undefined;
+  }): void;
+}
+
+/** A place for admins to rate a bot reply. Implemented by the learning engine. */
+export interface FeedbackSink {
+  addRating(
+    replyId: string,
+    chatId: string,
+    rating: number,
+    comment?: string,
+  ): void | Promise<void>;
+}
+
+/** Tunable weights for the system prompt, adjusted from outcomes and feedback. */
+export interface PromptWeights {
+  maxWords: number;
+  exampleBoost: number;
+  styleGuideStrength: number;
+  extraRules: string[];
+}
+
+/** Tunable weights for recall fusion, adjusted from outcomes and feedback. */
+export interface RecallWeights {
+  keywordWeight: number;
+  semanticWeight: number;
+  rrfK: number;
+}
+
+/** The full learning state, persisted as JSON. */
+export interface LearningState {
+  prompt: PromptWeights;
+  recall: RecallWeights;
+  feedbackCount: number;
+  goodCount: number;
+  badCount: number;
+  lastDistillAt?: number | undefined;
+}
+
+/** A patch to a persona, produced by the learning engine and applied by the SDK. */
+export interface PersonaPatch {
+  facts?: string[] | undefined;
+  phrases?: string[] | undefined;
+  styleGuide?: string | undefined;
+}
+
+/** One line of the fine-tune dataset. */
+export interface DatasetEntry {
+  messages: Turn[];
+  system: string;
+  completion: string;
+  chatId: string;
+  timestamp: number;
+}
