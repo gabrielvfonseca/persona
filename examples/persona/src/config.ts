@@ -15,6 +15,21 @@ const baseFields = {
   EMBEDDING_MODEL: z.string().optional(),
   /** Past messages added to each prompt. 0 turns recall off. */
   RECALL_LIMIT: z.coerce.number().int().min(0).max(20).default(4),
+  /** Enable continuous learning. Set to "true" to activate. */
+  LEARNING_ENABLED: z
+    .string()
+    .optional()
+    .refine((v) => v === undefined || v === "true", {
+      message: 'LEARNING_ENABLED must be "true"',
+    }),
+  /** How many outcomes before weights start moving. */
+  LEARNING_WARMUP: z.coerce.number().int().min(0).default(5),
+  /** Step size for weight nudges. */
+  LEARNING_STEP: z.coerce.number().min(0.1).default(0.5),
+  /** Run distillation every N outcomes. */
+  LEARNING_DISTILL_EVERY: z.coerce.number().int().min(1).default(20),
+  /** Max facts/phrases per patch. */
+  LEARNING_MAX_PATCH: z.coerce.number().int().min(1).default(5),
 };
 
 export const linkedDeviceSchema = z.object({

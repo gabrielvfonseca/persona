@@ -1,7 +1,7 @@
 export { MemoryBotState } from "./bot-state";
 export { MemoryDedupeStore } from "./dedupe";
 export { embedOrUndefined } from "./embed";
-export { reciprocalRankFusion } from "./fusion";
+export { reciprocalRankFusion, weightedReciprocalRankFusion } from "./fusion";
 export {
   DEFAULT_MAX_TURNS,
   type MemoryHistoryOptions,
@@ -28,3 +28,4 @@ export {
   type SearchOptions,
   tokenize,
 } from "./search";
+export { fuse, fuseWeighted, type WeightedNodes } from "./hybrid";

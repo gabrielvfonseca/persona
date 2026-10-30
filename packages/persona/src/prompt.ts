@@ -1,3 +1,4 @@
+import type { PromptWeights } from "@persona/core";
 import type { Persona } from "@persona/schemas";
 
 export interface PromptOptions {
@@ -10,16 +11,31 @@ export interface PromptOptions {
   /** Real exchanges shown to the model as examples. */
   maxExchanges?: number | undefined;
   maxExchangeChars?: number | undefined;
+  /** Tunable weights, adjusted by the learning engine. */
+  weights?: PromptWeights | undefined;
 }
 
 const SYSTEM_LINE = /end-to-end|\u200e/u;
 
+/**
+ * Builds the system prompt. `weights` lets the learning engine tune the prompt
+ * at runtime without rebuilding the persona.
+ */
 export function buildSystemPrompt(
   persona: Persona,
   opts: PromptOptions = {},
 ): string {
-  const maxWords = opts.maxWords ?? 15;
-  const maxExamples = opts.maxExamples ?? 8;
+  const weights = opts.weights ?? {
+    maxWords: 15,
+    exampleBoost: 1,
+    styleGuideStrength: 1,
+    extraRules: [],
+  };
+  const maxWords = weights.maxWords;
+  const maxExamples = Math.max(
+    1,
+    Math.round((opts.maxExamples ?? 8) * weights.exampleBoost),
+  );
   const maxExampleChars = opts.maxExampleChars ?? 80;
   const maxExchanges = opts.maxExchanges ?? 6;
   const maxExchangeChars = opts.maxExchangeChars ?? 160;
@@ -40,13 +56,23 @@ export function buildSystemPrompt(
     )
     .slice(0, maxExchanges);
 
+  const styleGuide = persona.styleGuide
+    ? weights.styleGuideStrength >= 1
+      ? persona.styleGuide
+      : persona.styleGuide
+          .split(/\n+/)
+          .slice(0, Math.ceil(persona.styleGuide.split(/\n+/).length * weights.styleGuideStrength))
+          .join("\n")
+    : "";
+
   const lines = [
     `You are ${persona.name}.`,
-    persona.styleGuide,
+    styleGuide,
     persona.languageHint ? `Language: ${persona.languageHint}` : "",
     `Reply in at most ${maxWords} words.`,
     opts.admitBeingABot !== false ? "If asked, admit you are an AI bot." : "",
     ...(opts.extraRules ?? []),
+    ...(weights.extraRules ?? []),
     "Examples:",
     ...examples.map((e) => `- ${e}`),
     ...(exchanges.length

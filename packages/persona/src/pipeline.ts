@@ -7,6 +7,7 @@ import type {
   ImageDescriber,
   IncomingMessage,
   Logger,
+  LearningObserver,
   MessageHandler,
   RateLimiter,
   ReplyGenerator,
@@ -40,6 +41,8 @@ export interface PersonaBotOptions {
   recall?:
     | ((chatId: string, query: string) => string[] | Promise<string[]>)
     | undefined;
+  /** Records outcomes for continuous learning. Fire-and-forget. */
+  learning?: LearningObserver | undefined;
 }
 
 export interface PersonaBot extends MessageHandler {
@@ -54,12 +57,20 @@ export interface PersonaBot extends MessageHandler {
  */
 export function createPersonaBot(opts: PersonaBotOptions): PersonaBot {
   const botState = opts.state ?? { paused: false, setPaused: () => {} };
+  const learning = opts.learning;
 
   async function handle(msg: IncomingMessage): Promise<HandleResult> {
     try {
       return await run(msg);
     } catch (error) {
       opts.logger.error("pipeline error", { id: msg.id, chatId: msg.chatId });
+      learning?.recordOutcome({
+        msg,
+        result: { kind: "failed", error },
+        systemPrompt: opts.systemPrompt ?? "",
+        historyTurns: [],
+        recallLines: [],
+      });
       return { kind: "failed", error };
     }
   }
@@ -108,6 +119,13 @@ export function createPersonaBot(opts: PersonaBotOptions): PersonaBot {
       ]);
     } catch (error) {
       logger.warn("generation failed", { id: msg.id, chatId: msg.chatId });
+      learning?.recordOutcome({
+        msg,
+        result: { kind: "failed", error },
+        systemPrompt: system,
+        historyTurns,
+        recallLines: [],
+      });
       return { kind: "failed", error };
     }
 
@@ -125,6 +143,13 @@ export function createPersonaBot(opts: PersonaBotOptions): PersonaBot {
     try {
       await channel.send(msg.chatId, reply, msg.id);
     } catch (error) {
+      learning?.recordOutcome({
+        msg,
+        result: { kind: "failed", error },
+        systemPrompt: system,
+        historyTurns,
+        recallLines: [],
+      });
       return { kind: "failed", error };
     }
 
@@ -136,6 +161,14 @@ export function createPersonaBot(opts: PersonaBotOptions): PersonaBot {
     if (opts.dedupe) {
       await opts.dedupe.set(dedupeKey, DEDUPE_TTL_MS).catch(() => {});
     }
+    learning?.recordOutcome({
+      msg,
+      result: { kind: "replied" },
+      systemPrompt: system,
+      historyTurns,
+      recallLines: [],
+      replyText: reply,
+    });
     return { kind: "replied" };
   }
 
@@ -144,7 +177,9 @@ export function createPersonaBot(opts: PersonaBotOptions): PersonaBot {
   ): Promise<HandleResult | null> {
     if (!opts.commands) return null;
     const participant = msg.senderId ?? msg.chatId;
-    const result = await opts.commands.handle(msg.text, participant);
+    const result = await opts.commands.handle(msg.text, participant, {
+      chatId: msg.chatId,
+    });
     if (!result.handled) return null;
     if (result.reply) {
       try {

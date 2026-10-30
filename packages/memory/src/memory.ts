@@ -4,12 +4,13 @@ import type {
   Embedder,
   HistoryStore,
   RateLimiter,
+  RecallWeights,
 } from "@persona/core";
 import { MemoryBotState } from "./bot-state";
 import { MemoryDedupeStore } from "./dedupe";
 import { embedOrUndefined } from "./embed";
 import { MemoryHistoryStore } from "./history";
-import { fuse } from "./hybrid";
+import { fuseWeighted } from "./hybrid";
 import {
   KNOWLEDGE_CHAT,
   type MemoryNode,
@@ -26,6 +27,8 @@ export interface MemoryOptions {
   /** Enables semantic recall. Without it, recall is keyword-only. */
   embedder?: Embedder | undefined;
   now?: (() => number) | undefined;
+  /** Recall fusion weights, tuned by the learning engine. */
+  recallWeights?: RecallWeights | undefined;
 }
 
 /** Everything a bot keeps between messages, in one object. */
@@ -44,7 +47,15 @@ export interface Memory {
    * first. Uses keyword and semantic rankings together when an embedder is set.
    */
   recall(chatId: string, query: string, limit?: number): Promise<MemoryNode[]>;
+  /** Update the fusion weights used by `recall`. */
+  setRecallWeights(w: RecallWeights): void;
 }
+
+const DEFAULT_RECALL: RecallWeights = {
+  keywordWeight: 1,
+  semanticWeight: 1,
+  rrfK: 60,
+};
 
 export function createMemory(opts: MemoryOptions = {}): Memory {
   const { embedder } = opts;
@@ -54,6 +65,7 @@ export function createMemory(opts: MemoryOptions = {}): Memory {
     nodes,
     embedder,
   });
+  let recallWeights: RecallWeights = { ...DEFAULT_RECALL, ...opts.recallWeights };
 
   async function remember(
     chatId: string,
@@ -76,6 +88,9 @@ export function createMemory(opts: MemoryOptions = {}): Memory {
     state: new MemoryBotState(),
     remember,
     learn: (text) => remember(KNOWLEDGE_CHAT, text, "fact"),
+    setRecallWeights: (w) => {
+      recallWeights = { ...recallWeights, ...w };
+    },
     async recall(chatId, query, limit = 5) {
       const chatIds = [chatId, KNOWLEDGE_CHAT];
       const candidates = Math.max(limit * 3, 10);
@@ -84,7 +99,10 @@ export function createMemory(opts: MemoryOptions = {}): Memory {
       const semantic = queryVector
         ? nodes.nearest(queryVector, { chatIds, limit: candidates })
         : [];
-      const ids = fuse([keyword, semantic]);
+      const ids = fuseWeighted([
+        { nodes: keyword, weight: recallWeights.keywordWeight },
+        { nodes: semantic, weight: recallWeights.semanticWeight },
+      ]);
       return ids
         .slice(0, limit)
         .map((id) => nodes.get(id))
