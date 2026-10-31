@@ -6,9 +6,11 @@ import type { Embedder } from "@persona/core";
  */
 export async function embedOrUndefined(
   embedder: Embedder | undefined,
-  texts: readonly string[],
+  texts: readonly string[]
 ): Promise<number[][] | undefined> {
-  if (!embedder || texts.length === 0) return undefined;
+  if (!embedder || texts.length === 0) {
+    return undefined;
+  }
   try {
     const vectors = await embedder.embed(texts);
     return vectors.length === texts.length ? vectors : undefined;

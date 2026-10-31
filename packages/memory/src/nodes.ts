@@ -7,14 +7,14 @@ export type NodeKind = "turn" | "fact" | "quote";
 export const KNOWLEDGE_CHAT = "*";
 
 export interface MemoryNode {
-  id: string;
   chatId: string;
+  createdAt: number;
+  /** Present when the node was embedded. */
+  embedding?: readonly number[] | undefined;
+  id: string;
   kind: NodeKind;
   role?: Turn["role"] | undefined;
   text: string;
-  /** Present when the node was embedded. */
-  embedding?: readonly number[] | undefined;
-  createdAt: number;
 }
 
 export type NewNode = Omit<MemoryNode, "id" | "createdAt"> & {
@@ -37,7 +37,7 @@ export function cosine(a: readonly number[], b: readonly number[]): number {
   let dot = 0;
   let na = 0;
   let nb = 0;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     const x = a[i] ?? 0;
     const y = b[i] ?? 0;
     dot += x * y;
@@ -73,8 +73,8 @@ export class NodeStore {
     this.seq += 1;
     const node: MemoryNode = {
       ...input,
-      id: `${input.chatId}#${this.seq}`,
       createdAt: input.createdAt ?? this.now(),
+      id: `${input.chatId}#${this.seq}`,
     };
     this.byId.set(node.id, node);
     this.order.push(node.id);
@@ -90,11 +90,11 @@ export class NodeStore {
   /** The last `limit` nodes of a chat, oldest first. Knowledge is not included. */
   recent(chatId: string, limit: number, kind?: NodeKind): MemoryNode[] {
     const out: MemoryNode[] = [];
-    for (let i = this.order.length - 1; i >= 0 && out.length < limit; i--) {
+    for (let i = this.order.length - 1; i >= 0 && out.length < limit; i -= 1) {
       const node = this.byId.get(this.order[i] ?? "");
-      if (!node || node.chatId !== chatId) continue;
-      if (kind && node.kind !== kind) continue;
-      out.push(node);
+      if (node?.chatId === chatId && (!kind || node.kind === kind)) {
+        out.push(node);
+      }
     }
     return out.reverse();
   }
@@ -102,7 +102,7 @@ export class NodeStore {
   /** Keyword (BM25) matches among `chatIds`, best first. */
   search(
     query: string,
-    opts: { chatIds?: readonly string[]; limit?: number } = {},
+    opts: { chatIds?: readonly string[]; limit?: number } = {}
   ): ScoredNode[] {
     return this.index
       .search(query, opts)
@@ -116,23 +116,31 @@ export class NodeStore {
   /** Nearest embedded nodes among `chatIds` by cosine similarity, best first. */
   nearest(
     vector: readonly number[],
-    opts: { chatIds?: readonly string[]; limit?: number } = {},
+    opts: { chatIds?: readonly string[]; limit?: number } = {}
   ): ScoredNode[] {
     const limit = opts.limit ?? 5;
-    const scored: ScoredNode[] = [];
-    for (const id of this.order) {
-      const node = this.byId.get(id);
-      if (!node?.embedding) continue;
-      if (opts.chatIds && !opts.chatIds.includes(node.chatId)) continue;
-      scored.push({ ...node, score: cosine(vector, node.embedding) });
-    }
-    return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+    const allowed = opts.chatIds ? new Set(opts.chatIds) : undefined;
+    return this.order
+      .flatMap((id): ScoredNode[] => {
+        const node = this.byId.get(id);
+        if (!node?.embedding) {
+          return [];
+        }
+        if (allowed && !allowed.has(node.chatId)) {
+          return [];
+        }
+        return [{ ...node, score: cosine(vector, node.embedding) }];
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
   }
 
   private evict(): void {
-    while (this.byId.size > this.maxNodes) {
-      const oldest = this.order.shift();
-      if (oldest === undefined) break;
+    const excess = this.byId.size - this.maxNodes;
+    if (excess <= 0) {
+      return;
+    }
+    for (const oldest of this.order.splice(0, excess)) {
       this.byId.delete(oldest);
       this.index.remove(oldest);
     }

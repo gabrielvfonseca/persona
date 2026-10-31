@@ -1,22 +1,37 @@
 import type {
   DatasetEntry,
-  HandleResult,
-  IncomingMessage,
   LearningObserver,
   LearningState,
+  OutcomeInput,
   PersonaPatch,
-  Turn,
 } from "@persona/core";
-import { LearningEngine } from "./engine";
+import { computeTopicTags, contextKey, hourBucket } from "@persona/core";
+import { type EngineOptions, LearningEngine } from "./engine";
 import type { Outcome } from "./extract";
+import {
+  computeRepeatScore,
+  computeTone,
+  extractFact,
+  userContent,
+} from "./extract";
 import type { LearningStore } from "./store";
 import { loadLearningState, saveLearningState } from "./store";
 
 export interface LearningSystemOptions {
-  store: LearningStore;
+  /**
+   * An engine that already holds the state you want. Prefer `engineOptions`,
+   * which builds the engine from the saved state.
+   */
   engine?: LearningEngine | undefined;
-  onPatch?: ((patch: PersonaPatch) => void | Promise<void>) | undefined;
+  /** Tuning for the engine. The engine starts from the saved state, not from defaults. */
+  engineOptions?: EngineOptions | undefined;
+  /** Persona quotes, used to penalise replies that repeat them. */
+  examples?: string[] | undefined;
   onDataset?: ((entries: DatasetEntry[]) => void | Promise<void>) | undefined;
+  onPatch?: ((patch: PersonaPatch) => void | Promise<void>) | undefined;
+  /** Persona length stats, used to score how close a reply is to the usual length. */
+  personaStats?: { medianLen: number } | undefined;
+  store: LearningStore;
 }
 
 /**
@@ -28,40 +43,72 @@ export class LearningSystem implements LearningObserver {
   private readonly store: LearningStore;
   private readonly onPatch: (patch: PersonaPatch) => void | Promise<void>;
   private readonly onDataset: (entries: DatasetEntry[]) => void | Promise<void>;
+  private readonly personaStats?: { medianLen: number } | undefined;
+  private readonly examples?: string[] | undefined;
 
   private constructor(
     engine: LearningEngine,
-    _state: LearningState,
     store: LearningStore,
-    opts: LearningSystemOptions,
+    opts: LearningSystemOptions
   ) {
     this.engine = engine;
     this.store = store;
     this.onPatch = opts.onPatch ?? noopPatch;
     this.onDataset = opts.onDataset ?? noopDataset;
+    this.personaStats = opts.personaStats;
+    this.examples = opts.examples;
   }
 
   static async create(opts: LearningSystemOptions): Promise<LearningSystem> {
     const state = await loadLearningState(opts.store);
-    const engine = opts.engine ?? new LearningEngine(state);
-    return new LearningSystem(engine, state, opts.store, opts);
+    const engine =
+      opts.engine ?? new LearningEngine(state, opts.engineOptions ?? {});
+    return new LearningSystem(engine, opts.store, opts);
   }
 
-  recordOutcome(input: {
-    msg: IncomingMessage;
-    result: HandleResult;
-    systemPrompt: string;
-    historyTurns: Turn[];
-    recallLines: string[];
-    replyText?: string | undefined;
-  }): void {
+  recordOutcome(input: OutcomeInput): void {
+    const timestamp = Date.now();
+    const userText = userContent(input.msg);
+    // persona.stats.medianLen is measured in characters, so the reply is too.
+    const stats = input.personaStats ?? this.personaStats;
+    const chars = input.replyText?.trim().length ?? 0;
+    const lengthRatio =
+      stats && stats.medianLen > 0 && chars > 0
+        ? chars / stats.medianLen
+        : undefined;
+    // Quality terms only describe a reply that was actually sent.
+    const reply =
+      input.result.kind === "replied" && input.replyText
+        ? input.replyText
+        : undefined;
     const outcome: Outcome = {
-      ...input,
-      timestamp: Date.now(),
+      contextKey: input.contextKey ?? contextKey(input.msg),
+      extractedFact:
+        reply === undefined ? undefined : extractFact(userText, reply),
+      historyTurns: input.historyTurns,
+      hourBucket: input.hourBucket ?? hourBucket(timestamp),
+      lengthRatio,
+      msg: input.msg,
+      recallLines: input.recallLines,
+      repeatScore:
+        reply === undefined
+          ? undefined
+          : computeRepeatScore(reply, input.examples ?? this.examples ?? []),
+      replyText: input.replyText,
+      result: input.result,
+      senderId: input.senderId ?? input.msg.senderId,
+      systemPrompt: input.systemPrompt,
+      timestamp,
+      tone: reply === undefined ? undefined : computeTone(reply),
+      // Topics come from what the user said, so replies group under the question they answered.
+      topicTags:
+        reply === undefined ? undefined : computeTopicTags(input.msg.text),
+      transformed: input.transformed,
     };
-    const shouldDistill = this.engine.ingestOutcome(outcome);
-    if (shouldDistill) {
-      this.distill().catch(() => {});
+    if (this.engine.ingestOutcome(outcome)) {
+      this.distill().catch(() => {
+        /* intentionally empty */
+      });
     }
   }
 
@@ -69,11 +116,9 @@ export class LearningSystem implements LearningObserver {
     _replyId: string,
     chatId: string,
     rating: number,
-    comment?: string,
+    comment?: string
   ): Promise<void> {
-    void chatId;
-    void comment;
-    this.engine.ingestFeedback(rating);
+    this.engine.ingestFeedback(rating, chatId, comment);
     await this.persist();
   }
 
@@ -105,16 +150,16 @@ export class LearningSystem implements LearningObserver {
 }
 
 function noopPatch(_patch: PersonaPatch): void {
-  // no-op
+  /* intentionally empty */
 }
 
 function noopDataset(_entries: DatasetEntry[]): void {
-  // no-op
+  /* intentionally empty */
 }
 
 /** A LearningObserver that does nothing. Useful when learning is off. */
 export const noopLearningObserver: LearningObserver = {
-  recordOutcome: () => {},
+  recordOutcome: () => undefined,
 };
 
 /** A FeedbackSink that does nothing. */

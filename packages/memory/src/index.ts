@@ -8,7 +8,12 @@ export {
   MemoryHistoryStore,
 } from "./history";
 export { fuse, fuseWeighted, type WeightedNodes } from "./hybrid";
-export { createMemory, type Memory, type MemoryOptions } from "./memory";
+export {
+  createMemory,
+  type Memory,
+  type MemoryOptions,
+  type MemoryStores,
+} from "./memory";
 export {
   cosine,
   KNOWLEDGE_CHAT,

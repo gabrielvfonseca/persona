@@ -1,5 +1,13 @@
+import { computeTopicTags } from "@persona/core";
 import type { Outcome } from "./extract";
-import { outcomeSignal, wasFailed, wasReplied } from "./extract";
+import {
+  computeRepeatScore,
+  computeTone,
+  extractFact,
+  outcomeSignal,
+  wasFailed,
+  wasReplied,
+} from "./extract";
 import type { LearningStore } from "./store";
 import {
   applyPatch,
@@ -10,10 +18,7 @@ import {
 } from "./store";
 
 export type { DatasetEntry } from "@persona/core";
-export type {
-  DistillResult,
-  EngineOptions,
-} from "./engine";
+export type { DistillResult, EngineOptions } from "./engine";
 export { LearningEngine } from "./engine";
 export type { LearningSystemOptions } from "./system";
 export {
@@ -24,7 +29,11 @@ export {
 export type { LearningStore, Outcome };
 export {
   applyPatch,
+  computeRepeatScore,
+  computeTone,
+  computeTopicTags,
   defaultLearningState,
+  extractFact,
   loadLearningState,
   mergeLearningState,
   outcomeSignal,

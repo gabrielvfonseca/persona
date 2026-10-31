@@ -38,7 +38,9 @@ export class SearchIndex {
     this.remove(id);
     const terms = new Map<string, number>();
     const tokens = tokenize(text);
-    for (const t of tokens) terms.set(t, (terms.get(t) ?? 0) + 1);
+    for (const t of tokens) {
+      terms.set(t, (terms.get(t) ?? 0) + 1);
+    }
     this.docs.set(id, { chatId, length: tokens.length, terms });
     this.totalLength += tokens.length;
     for (const t of terms.keys()) {
@@ -53,38 +55,45 @@ export class SearchIndex {
 
   remove(id: string): void {
     const doc = this.docs.get(id);
-    if (!doc) return;
+    if (!doc) {
+      return;
+    }
     this.docs.delete(id);
     this.totalLength -= doc.length;
     for (const t of doc.terms.keys()) {
       const ids = this.postings.get(t);
       ids?.delete(id);
-      if (ids?.size === 0) this.postings.delete(t);
+      if (ids?.size === 0) {
+        this.postings.delete(t);
+      }
     }
   }
 
   search(query: string, opts: SearchOptions = {}): SearchHit[] {
     const limit = opts.limit ?? 5;
     const queryTerms = [...new Set(tokenize(query))];
-    if (queryTerms.length === 0 || this.docs.size === 0) return [];
+    if (queryTerms.length === 0 || this.docs.size === 0) {
+      return [];
+    }
 
     const n = this.docs.size;
     const avgLength = this.totalLength / n || 1;
     const scores = new Map<string, number>();
 
+    const allowed = opts.chatIds ? new Set(opts.chatIds) : undefined;
     for (const term of queryTerms) {
-      const ids = this.postings.get(term);
-      if (!ids) continue;
+      const ids = this.postings.get(term) ?? new Set<string>();
       const df = ids.size;
       const idf = Math.log(1 + (n - df + 0.5) / (df + 0.5));
       for (const id of ids) {
         const doc = this.docs.get(id);
-        if (!doc) continue;
-        if (opts.chatIds && !opts.chatIds.includes(doc.chatId)) continue;
-        const tf = doc.terms.get(term) ?? 0;
-        const norm =
-          (tf * (K1 + 1)) / (tf + K1 * (1 - B + (B * doc.length) / avgLength));
-        scores.set(id, (scores.get(id) ?? 0) + idf * norm);
+        if (doc && (!allowed || allowed.has(doc.chatId))) {
+          const tf = doc.terms.get(term) ?? 0;
+          const norm =
+            (tf * (K1 + 1)) /
+            (tf + K1 * (1 - B + (B * doc.length) / avgLength));
+          scores.set(id, (scores.get(id) ?? 0) + idf * norm);
+        }
       }
     }
 

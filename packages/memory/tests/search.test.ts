@@ -34,7 +34,7 @@ describe("SearchIndex", () => {
     idx.add("a", "c1", "see you tomorrow");
     idx.add("b", "c2", "see you tomorrow");
     expect(
-      idx.search("tomorrow", { chatIds: ["c2"] }).map((h) => h.id),
+      idx.search("tomorrow", { chatIds: ["c2"] }).map((h) => h.id)
     ).toEqual(["b"]);
     idx.remove("b");
     expect(idx.search("tomorrow")).toHaveLength(1);
@@ -73,13 +73,13 @@ describe("MemoryHistoryStore", () => {
   it("returns a window for the model but keeps every turn searchable", async () => {
     const history = new MemoryHistoryStore({ maxTurns: 2 });
     await history.append("c1", [
-      { role: "user", content: "we talked about the beach" },
-      { role: "assistant", content: "nice" },
-      { role: "user", content: "and then lunch" },
+      { content: "we talked about the beach", role: "user" },
+      { content: "nice", role: "assistant" },
+      { content: "and then lunch", role: "user" },
     ]);
     expect(await history.load("c1")).toEqual([
-      { role: "assistant", content: "nice" },
-      { role: "user", content: "and then lunch" },
+      { content: "nice", role: "assistant" },
+      { content: "and then lunch", role: "user" },
     ]);
     expect(history.nodes.search("beach", { chatIds: ["c1"] })).toHaveLength(1);
   });
@@ -89,10 +89,10 @@ describe("createMemory", () => {
   it("recalls only the asked chat", async () => {
     const memory = createMemory();
     await memory.history.append("c1", [
-      { role: "user", content: "the bakery opens at nine" },
+      { content: "the bakery opens at nine", role: "user" },
     ]);
     await memory.history.append("c2", [
-      { role: "user", content: "the bakery is closed" },
+      { content: "the bakery is closed", role: "user" },
     ]);
     const hits = await memory.recall("c1", "bakery");
     expect(hits.map((h) => h.chatId)).toEqual(["c1"]);
@@ -104,8 +104,8 @@ describe("FixedWindowRateLimiter per key", () => {
     let now = 0;
     const limiter = new FixedWindowRateLimiter({
       maxPerWindow: 1,
-      windowMs: 1000,
       now: () => now,
+      windowMs: 1000,
     });
     expect(await limiter.allow("a")).toBe(true);
     expect(await limiter.allow("a")).toBe(false);

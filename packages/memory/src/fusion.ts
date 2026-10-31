@@ -4,11 +4,11 @@
  */
 export function reciprocalRankFusion(
   rankings: readonly (readonly string[])[],
-  k = 60,
+  k = 60
 ): string[] {
   return weightedReciprocalRankFusion(
     rankings.map((list) => ({ ids: list, weight: 1 })),
-    k,
+    k
   );
 }
 
@@ -25,7 +25,7 @@ export interface WeightedRanking {
  */
 export function weightedReciprocalRankFusion(
   rankings: readonly WeightedRanking[],
-  k = 60,
+  k = 60
 ): string[] {
   const scores = new Map<string, number>();
   for (const { ids, weight } of rankings) {

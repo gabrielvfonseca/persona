@@ -5,11 +5,11 @@ import { NodeStore } from "./nodes";
 export const DEFAULT_MAX_TURNS = 20;
 
 export interface MemoryHistoryOptions {
+  /** When set, each appended turn is embedded for semantic recall. */
+  embedder?: Embedder | undefined;
   /** Turns returned by `load`. Older turns stay searchable in the node store. */
   maxTurns?: number | undefined;
   nodes?: NodeStore | undefined;
-  /** When set, each appended turn is embedded for semantic recall. */
-  embedder?: Embedder | undefined;
 }
 
 /** A `HistoryStore` backed by turn nodes. */
@@ -28,22 +28,22 @@ export class MemoryHistoryStore implements HistoryStore {
     return Promise.resolve(
       this.nodes
         .recent(chatId, this.maxTurns, "turn")
-        .map((n) => ({ role: n.role ?? "user", content: n.text })),
+        .map((n) => ({ content: n.text, role: n.role ?? "user" }))
     );
   }
 
   async append(chatId: string, turns: Turn[]): Promise<void> {
     const vectors = await embedOrUndefined(
       this.embedder,
-      turns.map((t) => t.content),
+      turns.map((t) => t.content)
     );
     turns.forEach((t, i) => {
       this.nodes.add({
         chatId,
+        embedding: vectors?.[i],
         kind: "turn",
         role: t.role,
         text: t.content,
-        embedding: vectors?.[i],
       });
     });
   }

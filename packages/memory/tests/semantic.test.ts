@@ -10,15 +10,15 @@ import {
 /** Deterministic embedder: one dimension per known word, so similarity is predictable. */
 const WORDS = ["cat", "dog", "car", "bakery"];
 const fakeEmbedder: Embedder = {
-  async embed(texts) {
-    return texts.map((t) =>
-      WORDS.map((w) => (t.toLowerCase().includes(w) ? 1 : 0)),
+  embed(texts) {
+    return Promise.resolve(
+      texts.map((t) => WORDS.map((w) => (t.toLowerCase().includes(w) ? 1 : 0)))
     );
   },
 };
 const failingEmbedder: Embedder = {
-  async embed() {
-    throw new Error("provider down");
+  embed() {
+    return Promise.reject(new Error("provider down"));
   },
 };
 
@@ -38,7 +38,7 @@ describe("reciprocalRankFusion", () => {
       reciprocalRankFusion([
         ["a", "b"],
         ["b", "c"],
-      ]),
+      ])
     ).toEqual(["b", "a", "c"]);
   });
 });
@@ -47,8 +47,8 @@ describe("semantic recall", () => {
   it("ranks the message whose embedding matches the query first", async () => {
     const memory = createMemory({ embedder: fakeEmbedder });
     await memory.history.append("c1", [
-      { role: "user", content: "my dog needs a walk" },
-      { role: "user", content: "the bakery opens at nine" },
+      { content: "my dog needs a walk", role: "user" },
+      { content: "the bakery opens at nine", role: "user" },
     ]);
     const hits = await memory.recall("c1", "dog", 1);
     expect(hits[0]?.text).toBe("my dog needs a walk");
@@ -57,7 +57,7 @@ describe("semantic recall", () => {
   it("falls back to keyword search when the embedder fails", async () => {
     const memory = createMemory({ embedder: failingEmbedder });
     await memory.history.append("c1", [
-      { role: "user", content: "the bakery opens at nine" },
+      { content: "the bakery opens at nine", role: "user" },
     ]);
     const hits = await memory.recall("c1", "bakery", 3);
     expect(hits.map((h) => h.text)).toEqual(["the bakery opens at nine"]);
@@ -66,7 +66,7 @@ describe("semantic recall", () => {
 
   it("stores embeddings on turns when an embedder is set", async () => {
     const memory = createMemory({ embedder: fakeEmbedder });
-    await memory.history.append("c1", [{ role: "user", content: "a cat" }]);
+    await memory.history.append("c1", [{ content: "a cat", role: "user" }]);
     expect(memory.nodes.recent("c1", 1)[0]?.embedding).toEqual([1, 0, 0, 0]);
   });
 });

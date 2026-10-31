@@ -9,4 +9,4 @@ Conversation memory for one bot.
   (default 20); older turns stay searchable.
 
 Memory lives in the process. For persistence, pass your own `HistoryStore`, such as the
-KV store in `@persona/kv`.
+Postgres store in `@persona/postgres`.

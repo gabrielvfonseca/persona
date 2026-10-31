@@ -15,8 +15,8 @@ describe("MemoryHistoryStore", () => {
 
   it("appends and loads turns", async () => {
     const store = new MemoryHistoryStore();
-    await store.append("chat1", [{ role: "user", content: "hello" }]);
-    await store.append("chat1", [{ role: "assistant", content: "hi" }]);
+    await store.append("chat1", [{ content: "hello", role: "user" }]);
+    await store.append("chat1", [{ content: "hi", role: "assistant" }]);
     const turns = await store.load("chat1");
     expect(turns.length).toBe(2);
     expect(turns[0]?.content).toBe("hello");
@@ -25,8 +25,8 @@ describe("MemoryHistoryStore", () => {
 
   it("maintains separate chats", async () => {
     const store = new MemoryHistoryStore();
-    await store.append("chat1", [{ role: "user", content: "hello" }]);
-    await store.append("chat2", [{ role: "user", content: "world" }]);
+    await store.append("chat1", [{ content: "hello", role: "user" }]);
+    await store.append("chat2", [{ content: "world", role: "user" }]);
     const turns1 = await store.load("chat1");
     const turns2 = await store.load("chat2");
     expect(turns1[0]?.content).toBe("hello");
@@ -36,8 +36,8 @@ describe("MemoryHistoryStore", () => {
   it("limits to max 20 turns", async () => {
     const store = new MemoryHistoryStore();
     const turns = Array.from({ length: 25 }, (_, i) => ({
-      role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
       content: `msg${i}`,
+      role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
     }));
     await store.append("chat1", turns);
     const loaded = await store.load("chat1");
@@ -47,7 +47,7 @@ describe("MemoryHistoryStore", () => {
 
   it("returns copy of turns", async () => {
     const store = new MemoryHistoryStore();
-    await store.append("chat1", [{ role: "user", content: "hello" }]);
+    await store.append("chat1", [{ content: "hello", role: "user" }]);
     const turns1 = await store.load("chat1");
     const turns2 = await store.load("chat1");
     expect(turns1).not.toBe(turns2);
@@ -75,10 +75,10 @@ describe("MemoryDedupeStore", () => {
 
   it("evicts oldest entries when over max", async () => {
     const store = new MemoryDedupeStore(3);
-    await store.set("key1", 10000);
-    await store.set("key2", 10000);
-    await store.set("key3", 10000);
-    await store.set("key4", 10000);
+    await store.set("key1", 10_000);
+    await store.set("key2", 10_000);
+    await store.set("key3", 10_000);
+    await store.set("key4", 10_000);
     expect(await store.has("key1")).toBe(false);
     expect(await store.has("key4")).toBe(true);
   });
@@ -87,8 +87,8 @@ describe("MemoryDedupeStore", () => {
 describe("FixedWindowRateLimiter", () => {
   it("allows requests within limit", async () => {
     const limiter = new FixedWindowRateLimiter({
-      windowMs: 60000,
       maxPerWindow: 5,
+      windowMs: 60_000,
     });
     expect(await limiter.allow("chat1")).toBe(true);
     expect(await limiter.allow("chat1")).toBe(true);
@@ -99,8 +99,8 @@ describe("FixedWindowRateLimiter", () => {
 
   it("blocks requests over limit", async () => {
     const limiter = new FixedWindowRateLimiter({
-      windowMs: 60000,
       maxPerWindow: 3,
+      windowMs: 60_000,
     });
     await limiter.allow("chat1");
     await limiter.allow("chat1");
@@ -111,9 +111,9 @@ describe("FixedWindowRateLimiter", () => {
   it("resets after window expires", async () => {
     let now = 1000;
     const limiter = new FixedWindowRateLimiter({
-      windowMs: 1000,
       maxPerWindow: 2,
       now: () => now,
+      windowMs: 1000,
     });
     await limiter.allow("chat1");
     await limiter.allow("chat1");
@@ -124,8 +124,8 @@ describe("FixedWindowRateLimiter", () => {
 
   it("resets on demand", async () => {
     const limiter = new FixedWindowRateLimiter({
-      windowMs: 60000,
       maxPerWindow: 1,
+      windowMs: 60_000,
     });
     await limiter.allow("chat1");
     expect(await limiter.allow("chat1")).toBe(false);
@@ -135,7 +135,8 @@ describe("FixedWindowRateLimiter", () => {
 
   it("uses defaults", async () => {
     const limiter = new FixedWindowRateLimiter();
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 5; i += 1) {
+      // biome-ignore lint/performance/noAwaitInLoops: the calls share one limiter and must count in order
       expect(await limiter.allow("chat1")).toBe(true);
     }
     expect(await limiter.allow("chat1")).toBe(false);
