@@ -7,7 +7,7 @@ import { verifyWhatsAppWebhook } from "@openchannelprotocol/sdk/whatsapp";
 export function isValidSignature(
   rawBody: string,
   signatureHeader: string | null,
-  appSecret: string,
+  appSecret: string
 ): boolean {
   try {
     verifyWhatsAppWebhook(
@@ -15,7 +15,7 @@ export function isValidSignature(
         body: rawBody,
         headers: { "x-hub-signature-256": signatureHeader ?? undefined },
       },
-      appSecret,
+      appSecret
     );
     return true;
   } catch {

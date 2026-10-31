@@ -1,35 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { CloudApiClient } from "../../src/cloud/client";
-import { extractMessages } from "../../src/cloud/payload";
+import { WhatsappClient } from "../src/client";
+import { extractMessages } from "../src/payload";
 
-const json = (body: unknown) =>
-  new Response(JSON.stringify(body), {
-    headers: { "content-type": "application/json" },
-  });
+const json = (body: unknown) => Response.json(body);
 
 function fakeFetch(routes: Record<string, () => Response>) {
   const calls: { url: string; auth: string | null }[] = [];
-  const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    calls.push({ url, auth: new Headers(init?.headers).get("authorization") });
+    calls.push({ auth: new Headers(init?.headers).get("authorization"), url });
     const route = routes[url];
-    if (!route) return new Response("no route", { status: 404 });
-    return route();
+    if (!route) {
+      return Promise.resolve(new Response("no route", { status: 404 }));
+    }
+    return Promise.resolve(route());
   }) as typeof globalThis.fetch;
-  return { fetch, calls };
+  return { calls, fetch };
 }
 
-describe("CloudApiClient.downloadMedia", () => {
+describe("WhatsappClient.downloadMedia", () => {
   it("looks up the url, then fetches the file with the token", async () => {
     const { fetch, calls } = fakeFetch({
-      "https://graph.facebook.com/v22.0/m1": () =>
-        json({ url: "https://files.example/m1", file_size: 3 }),
       "https://files.example/m1": () => new Response(new Uint8Array([1, 2, 3])),
+      "https://graph.facebook.com/v22.0/m1": () =>
+        json({ file_size: 3, url: "https://files.example/m1" }),
     });
-    const client = new CloudApiClient({
-      phoneNumberId: "1",
+    const client = new WhatsappClient({
       accessToken: "tok",
       fetch,
+      phoneNumberId: "1",
     });
     const bytes = await client.downloadMedia("m1", 100);
     expect(Array.from(bytes)).toEqual([1, 2, 3]);
@@ -39,12 +38,12 @@ describe("CloudApiClient.downloadMedia", () => {
   it("refuses a file declared larger than the limit", async () => {
     const { fetch } = fakeFetch({
       "https://graph.facebook.com/v22.0/big": () =>
-        json({ url: "https://files.example/big", file_size: 999 }),
+        json({ file_size: 999, url: "https://files.example/big" }),
     });
-    const client = new CloudApiClient({
-      phoneNumberId: "1",
+    const client = new WhatsappClient({
       accessToken: "tok",
       fetch,
+      phoneNumberId: "1",
     });
     await expect(client.downloadMedia("big", 10)).rejects.toMatchObject({
       status: 413,
@@ -53,14 +52,14 @@ describe("CloudApiClient.downloadMedia", () => {
 
   it("refuses a file that is larger than declared", async () => {
     const { fetch } = fakeFetch({
+      "https://files.example/x": () => new Response(new Uint8Array(50)),
       "https://graph.facebook.com/v22.0/x": () =>
         json({ url: "https://files.example/x" }),
-      "https://files.example/x": () => new Response(new Uint8Array(50)),
     });
-    const client = new CloudApiClient({
-      phoneNumberId: "1",
+    const client = new WhatsappClient({
       accessToken: "tok",
       fetch,
+      phoneNumberId: "1",
     });
     await expect(client.downloadMedia("x", 10)).rejects.toMatchObject({
       status: 413,
@@ -69,22 +68,22 @@ describe("CloudApiClient.downloadMedia", () => {
 });
 
 const wrap = (messages: unknown[]) => ({
-  object: "whatsapp_business_account",
   entry: [
     {
-      id: "e",
       changes: [
         {
           field: "messages",
           value: {
+            messages,
             messaging_product: "whatsapp",
             metadata: { display_phone_number: "1", phone_number_id: "101" },
-            messages,
           },
         },
       ],
+      id: "e",
     },
   ],
+  object: "whatsapp_business_account",
 });
 
 describe("extractMessages media", () => {
@@ -94,16 +93,16 @@ describe("extractMessages media", () => {
         {
           from: "5511",
           id: "m1",
+          image: { caption: "look", id: "img-1", mime_type: "image/jpeg" },
           timestamp: "1",
           type: "image",
-          image: { id: "img-1", mime_type: "image/jpeg", caption: "look" },
         },
       ]),
-      "101",
+      "101"
     );
     expect(msg).toMatchObject({
-      text: "look",
       media: { kind: "image", mediaId: "img-1", mime: "image/jpeg" },
+      text: "look",
     });
   });
 
@@ -113,16 +112,16 @@ describe("extractMessages media", () => {
         {
           from: "5511",
           id: "m2",
+          sticker: { id: "st-1", mime_type: "image/webp" },
           timestamp: "1",
           type: "sticker",
-          sticker: { id: "st-1", mime_type: "image/webp" },
         },
       ]),
-      "101",
+      "101"
     );
     expect(msg).toMatchObject({
-      text: "",
       media: { kind: "sticker", mediaId: "st-1" },
+      text: "",
     });
   });
 });

@@ -10,12 +10,8 @@
       "@persona/policy": ["../packages/policy/src/index.ts"],
       "@persona/persona": ["../packages/persona/src/index.ts"],
       "@persona/learning": ["../packages/learning/src/index.ts"],
-      "@persona/kv": ["../packages/kv/src/index.ts"],
-      "@persona/whatsapp/cloud": ["../packages/whatsapp/src/cloud/index.ts"],
-      "@persona/whatsapp/baileys": [
-        "../packages/whatsapp/src/baileys/index.ts"
-      ],
-      "cloudflare:workers": ["./helpers/cloudflare-workers.ts"]
+      "@persona/postgres": ["../packages/postgres/src/index.ts"],
+      "@persona/whatsapp": ["../packages/whatsapp/src/index.ts"]
     }
   }
 }

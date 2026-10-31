@@ -21,13 +21,12 @@ provider and a transport.
 | `@persona/policy` | When to reply (`createReplyPolicy`) and admin commands (`createCommands`). | [persona-policy](../persona-policy/SKILL.md) |
 | `@persona/learning` | Outcomes, ratings, weight tuning, distillation, fine-tune dataset. | [persona-learning](../persona-learning/SKILL.md) |
 | `@persona/persona` | The main SDK: `createPersona` and `createPersonaBot`. | [persona-sdk](../persona-sdk/SKILL.md) |
-| `@persona/kv` | Key-value adapters for history, dedupe, rate limits and pause state. | [persona-kv](../persona-kv/SKILL.md) |
-| `@persona/whatsapp` | Transports: Cloud API (`/cloud`) and linked device via Baileys (`/baileys`). | [persona-whatsapp](../persona-whatsapp/SKILL.md) |
-| `examples/bot` | The app: config, OpenRouter model adapters, Node and Worker entry points. | [persona-example-bot](../persona-example-bot/SKILL.md) |
+| `@persona/whatsapp` | One package, one entry point: Cloud API webhook and linked device (Baileys). | [persona-whatsapp](../persona-whatsapp/SKILL.md) |
+| `examples/bot` | The app: config, local ggml-node model, group memory and ingest API, training, Node and Worker entry points. | [persona-example-bot](../persona-example-bot/SKILL.md) |
 
 Dependency rules live in `docs/PACKAGES.md` and are enforced by
 `bun scripts/index.ts check-deps`. Only `examples/*` may import a model provider
-(`ai`, `@openrouter/ai-sdk-provider`) or Hono.
+(`ggml-node`, Node-only) or Hono.
 
 ## The reply pipeline
 
@@ -73,18 +72,12 @@ Wrong or missing config? Start with [persona-example-bot](../persona-example-bot
 - Replies that copy a persona quote (20+ characters) are dropped by `noEcho`.
 - Message text is never logged. Only ids and reasons are.
 
-## Known gaps (read before you rely on them)
+## Status
 
-- `README.md` and `DEPLOY.md` document `bun run ingest`, and `persona-file.ts`
-  tells users to run it, but the ingest command and `@persona/training` were
-  removed. Persona files must be written by hand or produced elsewhere.
-  See [persona-schemas](../persona-schemas/SKILL.md).
-- `createPersona` ignores `prompt.maxWords`. Use `weights.maxWords` or
-  `setPromptWeights` until that is fixed. See [persona-sdk](../persona-sdk/SKILL.md).
-- `!learn` replies "Learned." but stores nothing. See [persona-policy](../persona-policy/SKILL.md).
-- Linked-device reconnects treat every disconnect as a logout. See [persona-whatsapp](../persona-whatsapp/SKILL.md).
-
-The tests that pin these are listed in [persona-testing](../persona-testing/SKILL.md).
+No known bugs are open. The problems from the last review are fixed and each has a
+regression test (see [persona-testing](../persona-testing/SKILL.md)): `prompt.maxWords`,
+`!learn`, reconnects, learning wiring and state restore, the pending-outcome bound, and the
+removed `ingest` docs. Persona files are written by hand; see [persona-schemas](../persona-schemas/SKILL.md).
 
 ## Where to go next
 

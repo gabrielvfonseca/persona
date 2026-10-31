@@ -1,145 +1,83 @@
 import { join } from "node:path";
+import type { ReplyGenerator } from "@persona/core";
 import { createMemory } from "@persona/memory";
-import { describe, expect, it, vi } from "vitest";
-import { buildBot, type Transport } from "../../examples/bot/src/bot";
+import { describe, expect, it } from "vitest";
+import { buildBot } from "../../examples/bot/src/bot";
 import { parseConfig } from "../../examples/bot/src/config";
 import { loadPersona } from "../../examples/bot/src/persona-file";
 import { fakeChannel, silentLogger } from "../helpers/fakes";
 
-const embed = vi.fn(async (texts: readonly string[]) =>
-  texts.map(() => [1, 0]),
-);
-
-// The example model adapters call OpenRouter. Replace them so the wiring can be
-// tested without a network or an API key.
-vi.mock("../../examples/bot/src/model", () => ({
-  openRouterGenerator: () => ({
-    generate: async () => "Sure, lets go",
-  }),
-  openRouterDescriber: () => ({
-    describe: async () => "a sunset",
-  }),
-  openRouterEmbedder: () => ({
-    embed: (texts: readonly string[]) => embed(texts),
-  }),
-}));
+/** A model stand-in: replies without loading anything. */
+const stubGenerator: ReplyGenerator = {
+  generate: () => Promise.resolve("Sure, lets go"),
+};
 
 const personaPath = join(
   import.meta.dirname,
-  "../../examples/bot/data/persona.example.json",
+  "../../examples/bot/data/persona.example.json"
 );
 
 const linkedEnv = {
+  DATABASE_URL: "postgres://persona:persona@localhost:5432/persona",
   PERSONA_CONSENT: "true",
+  PERSONA_MODEL: "qwen2.5-0.5b",
   PERSONA_NAME: "Ana",
-  PERSONA_MODEL: "openai/gpt-4o-mini",
-  OPENROUTER_API_KEY: "sk-test",
 };
 
-const cloudEnv = {
-  ...linkedEnv,
-  WHATSAPP_ACCESS_TOKEN: "token",
-  WHATSAPP_APP_SECRET: "secret",
-  WHATSAPP_PHONE_NUMBER_ID: "PHONE_1",
-  WHATSAPP_VERIFY_TOKEN: "verify",
-  ADMIN_KEY: "admin-pass",
-};
-
-describe("buildBot wiring by transport", () => {
-  const build = (
-    transport: Transport,
-    env: Record<string, string>,
-    extra = {},
-  ) => {
-    const config =
-      transport === "linked-device"
-        ? parseConfig(env, "linked-device")
-        : parseConfig(env, "cloud-api");
+describe("buildBot wiring", () => {
+  const build = async (env: Record<string, string>, extra = {}) => {
     const channel = fakeChannel();
-    const persona = loadPersona(personaPath);
-    const bot = buildBot({
-      config,
-      persona,
+    const bot = await buildBot({
       channel,
-      transport,
+      config: parseConfig(env),
+      generator: stubGenerator,
       logger: silentLogger,
+      persona: loadPersona(personaPath),
       ...extra,
     });
     return { bot, channel };
   };
 
-  it("answers every direct message on a linked device", async () => {
-    const { bot, channel } = build("linked-device", linkedEnv);
+  it("answers every direct message", async () => {
+    const { bot, channel } = await build(linkedEnv);
 
-    const result = await bot.handle({ id: "1", chatId: "c", text: "hello" });
+    const result = await bot.handle({ chatId: "c", id: "1", text: "hello" });
 
     expect(result).toEqual({ kind: "replied" });
     expect(channel.sent[0]?.text).toBe("Sure, lets go");
   });
 
-  it("answers direct messages on the Cloud API only when addressed", async () => {
-    const { bot } = build("cloud-api", cloudEnv);
-
-    const result = await bot.handle({ id: "1", chatId: "c", text: "hello" });
-    const addressed = await bot.handle({
-      id: "2",
-      chatId: "c",
-      text: "Ana, are you there?",
-    });
-
-    expect(result).toEqual({ kind: "skipped", reason: "not-addressed" });
-    expect(addressed).toEqual({ kind: "replied" });
-  });
-
   it("lets only ADMIN_NUMBERS pause the bot", async () => {
     const env = { ...linkedEnv, ADMIN_NUMBERS: "5511999999999" };
-    const { bot } = build("linked-device", env);
+    const { bot } = await build(env);
 
     await bot.handle({
-      id: "1",
       chatId: "c",
-      text: "!pause",
+      id: "1",
       senderId: "5511000000000",
+      text: "!pause",
     });
     expect(bot.state.paused).toBe(false);
 
     await bot.handle({
-      id: "2",
       chatId: "c",
-      text: "!pause",
+      id: "2",
       senderId: "5511999999999",
+      text: "!pause",
     });
     expect(bot.state.paused).toBe(true);
   });
 
-  it("uses the embedder only when EMBEDDING_MODEL is set", async () => {
-    embed.mockClear();
-    const { bot } = build("linked-device", {
-      ...linkedEnv,
-      EMBEDDING_MODEL: "openai/text-embedding-3-small",
-      RECALL_LIMIT: "2",
-    });
-
-    await bot.memory.learn("The bakery opens at 7am.");
-    await bot.handle({
-      id: "1",
-      chatId: "c",
-      text: "when does the bakery open?",
-    });
-
-    expect(embed).toHaveBeenCalled();
-  });
-
-  it("uses the injected memory when one is provided", () => {
+  it("uses the injected memory when one is provided", async () => {
     const memory = createMemory();
-    const { bot } = build("linked-device", linkedEnv, { memory });
+    const { bot } = await build(linkedEnv, { memory });
 
     expect(bot.memory).toBe(memory);
   });
 
   it("passes learning callbacks through to the pipeline", async () => {
     const recorded: string[] = [];
-    const { bot } = build("linked-device", linkedEnv, {
+    const { bot } = await build(linkedEnv, {
       learning: {
         recordOutcome: (input: { result: { kind: string } }) => {
           recorded.push(input.result.kind);
@@ -147,7 +85,7 @@ describe("buildBot wiring by transport", () => {
       },
     });
 
-    await bot.handle({ id: "1", chatId: "c", text: "hello" });
+    await bot.handle({ chatId: "c", id: "1", text: "hello" });
 
     expect(recorded).toEqual(["replied"]);
   });

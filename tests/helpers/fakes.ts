@@ -8,7 +8,7 @@ import type {
   ReplyGenerator,
   Turn,
 } from "@persona/core";
-import type { KVStorage } from "@persona/kv";
+import type { KVStorage } from "@persona/postgres";
 import { type Persona, parsePersona } from "@persona/schemas";
 import examplePersona from "../../examples/bot/data/persona.example.json";
 
@@ -22,34 +22,46 @@ export function fakeChannel(opts: { fail?: boolean } = {}) {
     [];
   const channel: Channel & { sent: typeof sent } = {
     name: "fake",
-    sent,
-    async send(chatId, text, replyTo) {
-      if (opts.fail) throw new Error("transport down");
-      sent.push({ chatId, text, replyTo });
+    send(chatId, text, replyTo) {
+      if (opts.fail) {
+        return Promise.reject(new Error("transport down"));
+      }
+      sent.push({ chatId, replyTo, text });
+      return Promise.resolve();
     },
+    sent,
   };
   return channel;
 }
 
 /** Returns a fixed reply and records every call it receives. */
+/** A reply generator that records its calls. A function reply may throw to simulate a model failure. */
 export function fakeGenerator(
-  reply: string | ((turns: Turn[]) => string) = "ok",
+  reply: string | ((turns: Turn[]) => string) = "ok"
 ) {
   const calls: { system: string; messages: Turn[] }[] = [];
   const generator: ReplyGenerator & { calls: typeof calls } = {
     calls,
-    async generate(system, messages) {
-      calls.push({ system, messages: structuredClone(messages) });
-      return typeof reply === "function" ? reply(messages) : reply;
+    generate(system, messages) {
+      calls.push({ messages: structuredClone(messages), system });
+      return Promise.resolve(
+        typeof reply === "function" ? reply(messages) : reply
+      );
     },
   };
   return generator;
 }
 
 export const silentLogger: Logger = {
-  info: () => {},
-  warn: () => {},
-  error: () => {},
+  error: () => {
+    /* intentionally empty */
+  },
+  info: () => {
+    /* intentionally empty */
+  },
+  warn: () => {
+    /* intentionally empty */
+  },
 };
 
 /** A plain Map-backed KV with the same surface as Workers KV. */
@@ -58,17 +70,19 @@ export function memoryKv() {
   const puts: { key: string; ttl?: number | undefined }[] = [];
   const kv: KVStorage & { data: Map<string, string>; puts: typeof puts } = {
     data,
-    puts,
-    async get(key) {
-      return data.get(key) ?? null;
+    delete(key) {
+      data.delete(key);
+      return Promise.resolve();
     },
-    async put(key, value, opts) {
+    get(key) {
+      return Promise.resolve(data.get(key) ?? null);
+    },
+    put(key, value, opts) {
       puts.push({ key, ttl: opts?.expirationTtl });
       data.set(key, value);
+      return Promise.resolve();
     },
-    async delete(key) {
-      data.delete(key);
-    },
+    puts,
   };
   return kv;
 }
@@ -77,32 +91,36 @@ export function memoryKv() {
 export function memoryHistory(): HistoryStore & { turns: Map<string, Turn[]> } {
   const turns = new Map<string, Turn[]>();
   return {
-    turns,
-    async load(chatId) {
-      return [...(turns.get(chatId) ?? [])];
-    },
-    async append(chatId, added) {
+    append(chatId, added) {
       turns.set(chatId, [...(turns.get(chatId) ?? []), ...added]);
+      return Promise.resolve();
     },
+    load(chatId) {
+      return Promise.resolve([...(turns.get(chatId) ?? [])]);
+    },
+    turns,
   };
 }
 
 export const noDedupe: DedupeStore = {
-  async has() {
-    return false;
+  has() {
+    return Promise.resolve(false);
   },
-  async set() {},
+  set() {
+    /* intentionally empty */
+    return Promise.resolve();
+  },
 };
 
 /** Describes images as "a red bike" and records what it was given. */
 export function fakeDescriber(description = "a red bike") {
   const seen: { bytes: number; mime: string }[] = [];
   const describer: ImageDescriber & { seen: typeof seen } = {
-    seen,
-    async describe(data, mime) {
+    describe(data, mime) {
       seen.push({ bytes: data.byteLength, mime });
-      return description;
+      return Promise.resolve(description);
     },
+    seen,
   };
   return describer;
 }
@@ -115,28 +133,28 @@ export function sign(body: string, appSecret: string): string {
 /** A WhatsApp Cloud API webhook body with one or more inbound messages. */
 export function cloudPayload(
   messages: Record<string, unknown>[],
-  phoneNumberId = "PHONE_1",
+  phoneNumberId = "PHONE_1"
 ): string {
   return JSON.stringify({
-    object: "whatsapp_business_account",
     entry: [
       {
-        id: "WABA_1",
         changes: [
           {
             field: "messages",
             value: {
+              messages,
               messaging_product: "whatsapp",
               metadata: {
                 display_phone_number: "5511000000000",
                 phone_number_id: phoneNumberId,
               },
-              messages,
             },
           },
         ],
+        id: "WABA_1",
       },
     ],
+    object: "whatsapp_business_account",
   });
 }
 
@@ -144,8 +162,8 @@ export function textMessage(id: string, from: string, body: string) {
   return {
     from,
     id,
+    text: { body },
     timestamp: "1700000000",
     type: "text",
-    text: { body },
   };
 }

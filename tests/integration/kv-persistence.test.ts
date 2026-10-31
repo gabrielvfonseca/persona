@@ -1,12 +1,12 @@
+import { createMemory } from "@persona/memory";
+import { createPersona } from "@persona/persona";
 import {
   kvDedupeStore,
   kvHistoryStore,
   kvRateLimiter,
   loadKvBotState,
   type PersistentBotState,
-} from "@persona/kv";
-import { createMemory } from "@persona/memory";
-import { createPersona } from "@persona/persona";
+} from "@persona/postgres";
 import { describe, expect, it } from "vitest";
 import {
   fakeChannel,
@@ -22,34 +22,34 @@ async function kvBot(kv: ReturnType<typeof memoryKv>, reply = "ok") {
   const channel = fakeChannel();
   const memory = {
     ...createMemory(),
-    history: kvHistoryStore(kv),
     dedupe: kvDedupeStore(kv),
+    history: kvHistoryStore(kv),
     rateLimiter: kvRateLimiter(kv, { maxPerWindow: 3 }),
     state: await loadKvBotState(kv),
   };
   const bot = createPersona({
-    persona: persona(),
+    admins: ["5511999999999"],
     channel,
     generator,
-    memory,
     logger: silentLogger,
+    memory,
+    persona: persona(),
     policy: { direct: "always" },
-    admins: ["5511999999999"],
   });
   return {
     bot,
-    generator,
     channel,
+    generator,
     memory,
     state: memory.state as PersistentBotState,
   };
 }
 
 const msg = (id: string, text = "hello", senderId?: string) => ({
-  id,
   chatId: "chat-1",
-  text,
+  id,
   senderId,
+  text,
 });
 
 describe("KV-backed history", () => {
@@ -63,18 +63,18 @@ describe("KV-backed history", () => {
 
     const turns = second.generator.calls[0]?.messages ?? [];
     expect(turns[0]).toEqual({
-      role: "user",
       content: "remember the color blue",
+      role: "user",
     });
-    expect(turns[1]).toEqual({ role: "assistant", content: "ok" });
+    expect(turns[1]).toEqual({ content: "ok", role: "assistant" });
   });
 
   it("keeps only the last 20 turns per chat", async () => {
     const kv = memoryKv();
     const store = kvHistoryStore(kv);
     const turns = Array.from({ length: 25 }, (_, i) => ({
-      role: "user" as const,
       content: `turn ${i}`,
+      role: "user" as const,
     }));
 
     await store.append("chat-1", turns);
@@ -95,17 +95,17 @@ describe("KV-backed history", () => {
   it("does not store history when generation fails", async () => {
     const kv = memoryKv();
     const generator = {
-      async generate(): Promise<string> {
-        throw new Error("model down");
+      generate(): Promise<string> {
+        return Promise.reject(new Error("model down"));
       },
     };
     const bot = createPersona({
-      persona: persona(),
       channel: fakeChannel(),
       generator,
       logger: silentLogger,
-      policy: { direct: "always" },
       memory: { ...createMemory(), history: kvHistoryStore(kv) },
+      persona: persona(),
+      policy: { direct: "always" },
     });
 
     const result = await bot.handle(msg("1"));
@@ -130,7 +130,7 @@ describe("KV-backed dedupe", () => {
 
   it("writes dedupe keys with a TTL of at least 60 seconds", async () => {
     const kv = memoryKv();
-    await kvDedupeStore(kv).set("whatsapp:1", 1_000);
+    await kvDedupeStore(kv).set("whatsapp:1", 1000);
 
     const put = kv.puts.find((p) => p.key === "dedupe:whatsapp:1");
     expect(put?.ttl).toBe(60);
@@ -171,8 +171,8 @@ describe("KV-backed rate limit", () => {
     let now = 0;
     const limiter = kvRateLimiter(kv, {
       maxPerWindow: 2,
-      windowMs: 60_000,
       now: () => now,
+      windowMs: 60_000,
     });
 
     expect(await limiter.allow("chat")).toBe(true);

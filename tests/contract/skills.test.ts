@@ -2,6 +2,13 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+const PATTERN_1 = /^---\n(?<g1>[\s\S]*?)\n---/u;
+const PATTERN_2 = /^\s+-\s+(?<g1>\S+\.ts)\s*$/gmu;
+const PATTERN_3 = /^## Exports\s*$/mu;
+const PATTERN_4 = /^## /mu;
+const PATTERN_5 = /^- `(?<g1>[A-Za-z_][A-Za-z0-9_]*)`/gmu;
+const PATTERN_6 = /\]\((?<g1>\.[^)#\s]*)(?:#[^)]*)?\)/gu;
+
 const root = join(import.meta.dirname, "../..");
 const skillsDir = join(root, "skills");
 
@@ -10,38 +17,35 @@ const skillDirs = readdirSync(skillsDir, { withFileTypes: true })
   .map((e) => e.name);
 
 interface Skill {
-  dir: string;
-  file: string;
-  text: string;
-  name?: string | undefined;
   description?: string | undefined;
-  modules: string[];
+  dir: string;
   exports: string[];
+  file: string;
+  modules: string[];
+  name?: string | undefined;
+  text: string;
 }
 
 /** Reads the frontmatter and the `## Exports` bullets. Frontmatter lists are simple `- item` blocks. */
 function parse(dir: string): Skill {
   const file = join(skillsDir, dir, "SKILL.md");
   const text = readFileSync(file, "utf8");
-  const fm = text.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
+  const fm = text.match(PATTERN_1)?.[1] ?? "";
   const field = (key: string) =>
-    fm.match(new RegExp(`^${key}:\\s*(.+)$`, "m"))?.[1]?.trim();
-  const modules = [...fm.matchAll(/^\s+-\s+(\S+\.ts)\s*$/gm)].map(
-    (m) => m[1] ?? "",
+    fm.match(new RegExp(`^${key}:\\s*(.+)$`, "mu"))?.[1]?.trim();
+  const modules = [...fm.matchAll(PATTERN_2)].map((m) => m[1] ?? "");
+  const exportsSection = text.split(PATTERN_3)[1]?.split(PATTERN_4)[0] ?? "";
+  const exports = [...exportsSection.matchAll(PATTERN_5)].map(
+    (m) => m[1] ?? ""
   );
-  const exportsSection =
-    text.split(/^## Exports\s*$/m)[1]?.split(/^## /m)[0] ?? "";
-  const exports = [
-    ...exportsSection.matchAll(/^- `([A-Za-z_][A-Za-z0-9_]*)`/gm),
-  ].map((m) => m[1] ?? "");
   return {
-    dir,
-    file,
-    text,
-    name: field("name"),
     description: field("description"),
-    modules,
+    dir,
     exports,
+    file,
+    modules,
+    name: field("name"),
+    text,
   };
 }
 
@@ -80,11 +84,13 @@ describe.each(skills.map((s) => [s.dir, s] as const))(
     });
 
     it("only lists exports that the modules really export", async () => {
-      if (skill.exports.length === 0) return;
+      if (skill.exports.length === 0) {
+        return;
+      }
       const loaded = await Promise.all(
         skill.modules.map(
-          (m) => import(join(root, m)) as Promise<Record<string, unknown>>,
-        ),
+          (m) => import(join(root, m)) as Promise<Record<string, unknown>>
+        )
       );
       for (const name of skill.exports) {
         const found = loaded.some((mod) => name in mod);
@@ -93,13 +99,11 @@ describe.each(skills.map((s) => [s.dir, s] as const))(
     });
 
     it("resolves every relative markdown link", () => {
-      const links = [
-        ...skill.text.matchAll(/\]\((\.[^)#\s]*)(?:#[^)]*)?\)/g),
-      ].map((m) => m[1] ?? "");
+      const links = [...skill.text.matchAll(PATTERN_6)].map((m) => m[1] ?? "");
       for (const link of links) {
         const target = join(dirname(skill.file), link);
         expect(existsSync(target), link).toBe(true);
       }
     });
-  },
+  }
 );

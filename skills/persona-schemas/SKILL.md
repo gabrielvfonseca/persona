@@ -17,7 +17,7 @@ defines it with zod and parses it with `parsePersona`.
   "version": 1,
   "name": "Ana",
   "styleGuide": "Short, warm and casual. Lowercase is fine.",
-  "languageHint": "pt-BR",
+  "languageHint": "pt-PT",
   "stats": { "medianLen": 18, "p90Len": 52, "messageCount": 1200 },
   "quotes": ["haha sim, bora", "amanhã eu te falo"],
   "phrases": ["bora", "kkkk"],
@@ -58,10 +58,9 @@ becomes zeros. Anything else must match `personaV1`.
 
 ## Creating a persona file
 
-The ingest step that once built a file from a chat export has been removed, and
-`README.md`, `DEPLOY.md` and `docs/API.md` still describe it. Until it returns,
-write the file by hand, starting from `persona.example.json`. Only use real
-messages from someone who has consented.
+Copy `examples/bot/data/persona.example.json` and edit it. There is no import tool. Only use
+messages from someone who has consented. Both the linked-device app and the Worker validate the
+file with `parsePersona` at startup, so a bad file stops the bot with the zod error.
 
 ## Gotchas
 

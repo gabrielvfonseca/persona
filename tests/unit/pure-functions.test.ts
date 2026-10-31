@@ -23,9 +23,9 @@ import {
   stripSpeakerPrefix,
 } from "../../packages/persona/src/guards";
 import { buildSystemPrompt } from "../../packages/persona/src/prompt";
-import { extractMessages } from "../../packages/whatsapp/src/cloud/payload";
-import { isValidSignature } from "../../packages/whatsapp/src/cloud/signature";
 import { isWebp } from "../../packages/whatsapp/src/media";
+import { extractMessages } from "../../packages/whatsapp/src/payload";
+import { isValidSignature } from "../../packages/whatsapp/src/signature";
 import { persona, sign } from "../helpers/fakes";
 
 describe("memory: ranking and search", () => {
@@ -97,8 +97,8 @@ describe("memory: limits and dedupe", () => {
     let now = 0;
     const limiter = new FixedWindowRateLimiter({
       maxPerWindow: 2,
-      windowMs: 1000,
       now: () => now,
+      windowMs: 1000,
     });
 
     expect([
@@ -127,14 +127,14 @@ describe("persona: guards and transforms", () => {
     expect(stripSpeakerPrefix("Ana: sure")).toBe("sure");
     // The prefix before the colon is capped at 20 characters.
     expect(stripSpeakerPrefix("a much longer lead-in: with a colon")).toBe(
-      "a much longer lead-in: with a colon",
+      "a much longer lead-in: with a colon"
     );
   });
 
   it("keeps the first sentence, including its punctuation", () => {
     expect(firstSentence("Yes! Then more. And more.")).toBe("Yes!");
     expect(firstSentence("no punctuation at all")).toBe(
-      "no punctuation at all",
+      "no punctuation at all"
     );
   });
 
@@ -142,7 +142,7 @@ describe("persona: guards and transforms", () => {
     const ctx = { examples: ["see you at the corner of the street"] };
 
     expect(noEcho("I said see you at the corner of the street", ctx)).toBe(
-      false,
+      false
     );
     expect(noEcho("short quote", { examples: ["short"] })).toBe(true);
   });
@@ -161,12 +161,12 @@ describe("persona: schema and prompt", () => {
     });
 
     expect(parsed).toMatchObject({
-      version: 1,
-      name: "Old",
-      styleGuide: "calm",
-      quotes: [],
-      phrases: [],
       facts: [],
+      name: "Old",
+      phrases: [],
+      quotes: [],
+      styleGuide: "calm",
+      version: 1,
     });
   });
 
@@ -193,17 +193,17 @@ describe("persona: schema and prompt", () => {
   it("adds the bot admission line unless it is turned off", () => {
     expect(buildSystemPrompt(persona())).toContain("admit you are an AI bot");
     expect(
-      buildSystemPrompt(persona(), { admitBeingABot: false }),
+      buildSystemPrompt(persona(), { admitBeingABot: false })
     ).not.toContain("admit you are an AI bot");
   });
 
   it("uses the weights' maxWords in the reply limit", () => {
     const prompt = buildSystemPrompt(persona(), {
       weights: {
-        maxWords: 9,
         exampleBoost: 1,
-        styleGuideStrength: 1,
         extraRules: [],
+        maxWords: 9,
+        styleGuideStrength: 1,
       },
     });
 
@@ -212,28 +212,31 @@ describe("persona: schema and prompt", () => {
 });
 
 describe("learning: pure helpers", () => {
-  it("maps a result kind to a signal: replied +1, failed -1, anything else 0", () => {
+  it("maps a result kind to a signal: replied +1, failed -1, skip reasons by table", () => {
     const base = {
-      msg: { id: "1", chatId: "c", text: "" },
-      systemPrompt: "",
       historyTurns: [],
+      msg: { chatId: "c", id: "1", text: "" },
       recallLines: [],
+      systemPrompt: "",
       timestamp: 0,
     };
 
     expect(outcomeSignal({ ...base, result: { kind: "replied" } })).toBe(1);
     expect(
-      outcomeSignal({ ...base, result: { kind: "failed", error: "x" } }),
+      outcomeSignal({ ...base, result: { error: "x", kind: "failed" } })
     ).toBe(-1);
     expect(
-      outcomeSignal({ ...base, result: { kind: "skipped", reason: "empty" } }),
+      outcomeSignal({ ...base, result: { kind: "skipped", reason: "empty" } })
+    ).toBe(-0.5);
+    expect(
+      outcomeSignal({ ...base, result: { kind: "skipped", reason: "paused" } })
     ).toBe(0);
   });
 
   it("merges a partial state without overwriting present fields", () => {
     const merged = mergeLearningState(defaultLearningState(), {
-      prompt: { maxWords: 22 } as never,
       badCount: 4,
+      prompt: { maxWords: 22 },
     });
 
     expect(merged.prompt.maxWords).toBe(22);
@@ -245,7 +248,7 @@ describe("learning: pure helpers", () => {
   it("applies a patch to facts, phrases and style guide without duplicates", () => {
     const result = applyPatch(
       { facts: ["Likes tea", "likes tea"], styleGuide: "Be brief." },
-      { facts: ["Likes tea"], phrases: [], styleGuide: "Be warm." },
+      { facts: ["Likes tea"], phrases: [], styleGuide: "Be warm." }
     );
 
     expect(result.facts).toEqual(["Likes tea"]);
@@ -279,44 +282,44 @@ describe("whatsapp: cloud helpers", () => {
   it("extracts text and media messages, skipping other types", () => {
     const messages = extractMessages(
       {
-        object: "whatsapp_business_account",
         entry: [
           {
-            id: "W",
             changes: [
               {
                 field: "messages",
                 value: {
-                  messaging_product: "whatsapp",
-                  metadata: { display_phone_number: "1", phone_number_id: "P" },
                   messages: [
                     {
                       from: "55",
                       id: "a",
+                      text: { body: "hi" },
                       timestamp: "1",
                       type: "text",
-                      text: { body: "hi" },
                     },
                     { from: "55", id: "b", timestamp: "1", type: "reaction" },
                     {
                       from: "55",
                       id: "c",
-                      timestamp: "1",
-                      type: "image",
                       image: {
+                        caption: "cap",
                         id: "M1",
                         mime_type: "image/png",
-                        caption: "cap",
                       },
+                      timestamp: "1",
+                      type: "image",
                     },
                   ],
+                  messaging_product: "whatsapp",
+                  metadata: { display_phone_number: "1", phone_number_id: "P" },
                 },
               },
             ],
+            id: "W",
           },
         ],
+        object: "whatsapp_business_account",
       },
-      "P",
+      "P"
     );
 
     expect(messages.map((m) => [m.id, m.text])).toEqual([

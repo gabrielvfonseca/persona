@@ -1,32 +1,33 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  cloudApiSchema,
-  linkedDeviceSchema,
-} from "../../examples/bot/src/config";
+import { configSchema } from "../../examples/bot/src/config";
 import { allowedDependencies } from "../../scripts/packages";
+
+const PATTERN_1 = /^#?\s*(?<g1>[A-Z][A-Z0-9_]*)=/u;
+const PATTERN_2 = /^\|\s*`(?<g1>[A-Z][A-Z0-9_]*)`\s*\|/gmu;
+const PATTERN_3 = /@persona\/(?<g1>[a-z]+)/gu;
+const PATTERN_4 = /`@persona\/(?<g1>[a-z]+)/gu;
+const PATTERN_5 = /^\| `@persona\/(?<g1>[a-z]+)` \|[^|]*\|(?<g2>[^|]*)\|/gmu;
+const PATTERN_6 = /[`\s]/gu;
+const PATTERN_7 = /bun run (?:--cwd examples\/bot )?(?<g1>[a-z-]+)/gu;
+const PATTERN_8 = /bun run (?<g1>--cwd examples\/bot )?ingest/u;
 
 const root = join(import.meta.dirname, "../..");
 const read = (rel: string) => readFileSync(join(root, rel), "utf8");
 
-const schemaKeys = [
-  ...new Set([
-    ...Object.keys(linkedDeviceSchema.shape),
-    ...Object.keys(cloudApiSchema.shape),
-  ]),
-];
+const schemaKeys = Object.keys(configSchema.shape);
 
 /** Keys from `KEY=` lines in an env template. Commented-out `# KEY=` lines count as documented. */
 const envKeys = (text: string) =>
   text
     .split("\n")
-    .map((line) => line.match(/^#?\s*([A-Z][A-Z0-9_]*)=/)?.[1])
+    .map((line) => line.match(PATTERN_1)?.[1])
     .filter((k): k is string => Boolean(k));
 
 /** First-column keys of a markdown table row like "| `KEY` | ...". */
 const tableKeys = (text: string) =>
-  [...text.matchAll(/^\|\s*`([A-Z][A-Z0-9_]*)`\s*\|/gm)].map((m) => m[1] ?? "");
+  [...text.matchAll(PATTERN_2)].map((m) => m[1] ?? "");
 
 describe("env documentation matches config.ts", () => {
   it("every key in examples/bot/.env.example is read by config.ts", () => {
@@ -59,14 +60,12 @@ describe("env documentation matches config.ts", () => {
 
 describe("architecture docs match the package graph", () => {
   const packageNames = Object.keys(allowedDependencies).map((n) =>
-    n.replace("@persona/", ""),
+    n.replace("@persona/", "")
   );
 
   it("names only packages that exist in ARCHITECTURE.md", () => {
     const text = read("docs/ARCHITECTURE.md");
-    const mentioned = [...text.matchAll(/@persona\/([a-z]+)/g)].map(
-      (m) => m[1] ?? "",
-    );
+    const mentioned = [...text.matchAll(PATTERN_3)].map((m) => m[1] ?? "");
     for (const name of new Set(mentioned)) {
       expect(packageNames, name).toContain(name);
     }
@@ -74,9 +73,7 @@ describe("architecture docs match the package graph", () => {
 
   it("names only packages that exist in PACKAGES.md", () => {
     const text = read("docs/PACKAGES.md");
-    const mentioned = [...text.matchAll(/`@persona\/([a-z]+)/g)].map(
-      (m) => m[1] ?? "",
-    );
+    const mentioned = [...text.matchAll(PATTERN_4)].map((m) => m[1] ?? "");
     for (const name of new Set(mentioned)) {
       expect(packageNames, name).toContain(name);
     }
@@ -90,21 +87,17 @@ describe("architecture docs match the package graph", () => {
   });
 
   it("states the same @persona/* dependencies as scripts/packages.ts", () => {
-    const rows = [
-      ...read("docs/PACKAGES.md").matchAll(
-        /^\| `@persona\/([a-z]+)` \|[^|]*\|([^|]*)\|/gm,
-      ),
-    ];
+    const rows = [...read("docs/PACKAGES.md").matchAll(PATTERN_5)];
     expect(rows.length).toBe(packageNames.length);
     for (const [, name, dependsOn] of rows) {
       const declared = (dependsOn ?? "")
         .split(",")
-        .map((s) => s.replace(/[`\s]/g, ""))
+        .map((s) => s.replace(PATTERN_6, ""))
         .filter((s) => packageNames.includes(s));
       expect(declared.sort(), `@persona/${name}`).toEqual(
         (allowedDependencies[`@persona/${name}`] ?? [])
           .map((d) => d.replace("@persona/", ""))
-          .sort(),
+          .sort()
       );
     }
   });
@@ -112,27 +105,39 @@ describe("architecture docs match the package graph", () => {
 
 describe("README quick start references real scripts", () => {
   it("every `bun run --cwd examples/bot <script>` in README.md exists in examples/bot/package.json", () => {
-    const scripts = JSON.parse(read("examples/bot/package.json"))
-      .scripts as Record<string, string>;
-    const used = [
-      ...read("README.md").matchAll(
-        /bun run (?:--cwd examples\/bot )?([a-z-]+)/g,
-      ),
-    ].map((m) => m[1] ?? "");
-    // "ingest" is a known gap, tracked by the it.fails test below.
-    const knownMissing = new Set(["ingest"]);
+    const scripts = scriptNames(JSON.parse(read("examples/bot/package.json")));
+    const used = [...read("README.md").matchAll(PATTERN_7)].map(
+      (m) => m[1] ?? ""
+    );
     for (const name of new Set(used)) {
-      if (knownMissing.has(name)) continue;
-      expect(Object.keys(scripts), name).toContain(name);
+      expect(scripts, name).toContain(name);
     }
   });
 
-  // Known gap: README.md and DEPLOY.md still document `bun run ingest`, but the ingest
-  // command and @persona/training were removed. It.fails stays green until the docs or a
-  // real ingest script land.
-  it.fails("the documented ingest command exists", () => {
-    const scripts = JSON.parse(read("examples/bot/package.json"))
-      .scripts as Record<string, string>;
-    expect(Object.keys(scripts)).toContain("ingest");
+  it("no doc tells users to run the removed ingest command", () => {
+    const docs = [
+      "README.md",
+      "DEPLOY.md",
+      "docs/API.md",
+      "docs/PACKAGES.md",
+      "examples/bot/.env.example",
+    ];
+    for (const doc of docs) {
+      expect(read(doc), doc).not.toMatch(PATTERN_8);
+    }
   });
 });
+
+/** The script names in a parsed package.json. Anything without scripts has none. */
+function scriptNames(manifest: unknown): string[] {
+  if (typeof manifest !== "object" || manifest === null) {
+    return [];
+  }
+  if (!("scripts" in manifest)) {
+    return [];
+  }
+  const { scripts } = manifest;
+  return typeof scripts === "object" && scripts !== null
+    ? Object.keys(scripts)
+    : [];
+}

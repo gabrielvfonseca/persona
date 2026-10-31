@@ -10,9 +10,11 @@ import {
   silentLogger,
 } from "../helpers/fakes";
 
+const PATTERN_1 = /lives in são paulo/giu;
+
 const msg = (over: Partial<IncomingMessage> = {}): IncomingMessage => ({
-  id: "m-1",
   chatId: "chat-1",
+  id: "m-1",
   text: "hi there",
   ...over,
 });
@@ -20,22 +22,21 @@ const msg = (over: Partial<IncomingMessage> = {}): IncomingMessage => ({
 type BuildOptions = Partial<Parameters<typeof createPersona>[0]> & {
   /** Shorthand for a fake generator that always replies with this text. */
   reply?: string | ((turns: Turn[]) => string);
+  /** The fakes are typed so tests can read .sent and .calls. */
+  channel?: ReturnType<typeof fakeChannel>;
+  generator?: ReturnType<typeof fakeGenerator>;
 };
 
 function build(opts: BuildOptions = {}) {
   const { reply, ...rest } = opts;
-  // Typed as the fakes so tests can read .sent and .calls without casts.
-  const channel = (rest.channel ?? fakeChannel()) as ReturnType<
-    typeof fakeChannel
-  >;
-  const generator = (rest.generator ??
-    fakeGenerator(reply ?? "Sure thing")) as ReturnType<typeof fakeGenerator>;
+  const channel = rest.channel ?? fakeChannel();
+  const generator = rest.generator ?? fakeGenerator(reply ?? "Sure thing");
   const bot = createPersona({
     logger: silentLogger,
     ...rest,
-    persona: rest.persona ?? persona(),
     channel,
     generator,
+    persona: rest.persona ?? persona(),
   });
   return { bot, channel, generator };
 }
@@ -51,7 +52,7 @@ describe("createPersona: reply pipeline", () => {
     expect(result).toEqual({ kind: "replied" });
     expect(generator.calls).toHaveLength(1);
     expect(channel.sent).toEqual([
-      { chatId: "chat-1", text: "Sure thing", replyTo: "m-1" },
+      { chatId: "chat-1", replyTo: "m-1", text: "Sure thing" },
     ]);
   });
 
@@ -59,7 +60,7 @@ describe("createPersona: reply pipeline", () => {
     const { bot, generator } = build();
 
     const result = await bot.handle(
-      msg({ isGroup: true, senderName: "Bia", text: "anyone up for lunch?" }),
+      msg({ isGroup: true, senderName: "Bia", text: "anyone up for lunch?" })
     );
 
     expect(result).toEqual({ kind: "skipped", reason: "not-addressed" });
@@ -74,14 +75,14 @@ describe("createPersona: reply pipeline", () => {
         isGroup: true,
         senderName: "Bia",
         text: "Ana, what do you think?",
-      }),
+      })
     );
 
     expect(result.kind).toBe("replied");
     const last = generator.calls[0]?.messages.at(-1);
     expect(last).toEqual({
-      role: "user",
       content: "Bia: Ana, what do you think?",
+      role: "user",
     });
   });
 
@@ -91,10 +92,10 @@ describe("createPersona: reply pipeline", () => {
     const result = await bot.handle(
       msg({
         isGroup: true,
+        mentionsBot: true,
         senderName: "Bia",
         text: "hey you",
-        mentionsBot: true,
-      }),
+      })
     );
 
     expect(result.kind).toBe("replied");
@@ -127,8 +128,8 @@ describe("createPersona: reply pipeline", () => {
     const memory = createMemory();
     await memory.learn("The office closes at 6pm on Fridays.");
     const { bot, generator } = build({
-      policy: { direct: "always" },
       memory,
+      policy: { direct: "always" },
       recallLimit: 3,
     });
 
@@ -142,7 +143,7 @@ describe("createPersona: reply pipeline", () => {
   it("leaves the system prompt alone when recall is off", async () => {
     const memory = createMemory();
     await memory.learn("The office closes at 6pm on Fridays.");
-    const { bot, generator } = build({ policy: { direct: "always" }, memory });
+    const { bot, generator } = build({ memory, policy: { direct: "always" } });
 
     await bot.handle(msg({ text: "when does the office close on friday?" }));
 
@@ -151,7 +152,7 @@ describe("createPersona: reply pipeline", () => {
 
   it("skips a duplicate message id", async () => {
     const memory = createMemory();
-    const { bot, generator } = build({ policy: { direct: "always" }, memory });
+    const { bot, generator } = build({ memory, policy: { direct: "always" } });
 
     await bot.handle(msg({ id: "dup" }));
     const second = await bot.handle(msg({ id: "dup" }));
@@ -162,10 +163,11 @@ describe("createPersona: reply pipeline", () => {
 
   it("rate limits per chat and counts every model call", async () => {
     const memory = createMemory({ maxPerWindow: 2 });
-    const { bot } = build({ policy: { direct: "always" }, memory });
+    const { bot } = build({ memory, policy: { direct: "always" } });
 
-    const results = [];
-    for (let i = 0; i < 3; i++) {
+    const results: Awaited<ReturnType<typeof bot.handle>>[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      // biome-ignore lint/performance/noAwaitInLoops: replies are checked in the order the messages were sent
       results.push(await bot.handle(msg({ id: `r-${i}`, text: `q${i}` })));
     }
 
@@ -179,10 +181,10 @@ describe("createPersona: reply pipeline", () => {
 
   it("does not let one chat use up another chat's limit", async () => {
     const memory = createMemory({ maxPerWindow: 1 });
-    const { bot } = build({ policy: { direct: "always" }, memory });
+    const { bot } = build({ memory, policy: { direct: "always" } });
 
-    const a = await bot.handle(msg({ id: "a", chatId: "chat-a" }));
-    const b = await bot.handle(msg({ id: "b", chatId: "chat-b" }));
+    const a = await bot.handle(msg({ chatId: "chat-a", id: "a" }));
+    const b = await bot.handle(msg({ chatId: "chat-b", id: "b" }));
 
     expect(a.kind).toBe("replied");
     expect(b.kind).toBe("replied");
@@ -193,8 +195,8 @@ describe("createPersona: reply pipeline", () => {
     const quote = "tudo bem por aqui agora mesmo";
     const base = persona();
     const { bot, channel } = build({
-      policy: { direct: "always" },
       persona: { ...base, quotes: [quote] },
+      policy: { direct: "always" },
       reply: `Well, ${quote} and that is that`,
     });
 
@@ -218,12 +220,10 @@ describe("createPersona: reply pipeline", () => {
 
   it("returns failed when generation throws and does not store history", async () => {
     const memory = createMemory();
-    const generator = {
-      async generate(): Promise<string> {
-        throw new Error("model down");
-      },
-    };
-    const { bot } = build({ policy: { direct: "always" }, memory, generator });
+    const generator = fakeGenerator(() => {
+      throw new Error("model down");
+    });
+    const { bot } = build({ generator, memory, policy: { direct: "always" } });
 
     const result = await bot.handle(msg());
 
@@ -234,9 +234,9 @@ describe("createPersona: reply pipeline", () => {
   it("returns failed when sending throws and does not store history", async () => {
     const memory = createMemory();
     const { bot } = build({
-      policy: { direct: "always" },
-      memory,
       channel: fakeChannel({ fail: true }),
+      memory,
+      policy: { direct: "always" },
     });
 
     const result = await bot.handle(msg());
@@ -247,8 +247,8 @@ describe("createPersona: reply pipeline", () => {
 
   it("never throws, even when the channel fails", async () => {
     const { bot } = build({
-      policy: { direct: "always" },
       channel: fakeChannel({ fail: true }),
+      policy: { direct: "always" },
     });
 
     await expect(bot.handle(msg())).resolves.toMatchObject({ kind: "failed" });
@@ -257,50 +257,50 @@ describe("createPersona: reply pipeline", () => {
   it("describes attached images and passes the description to the model", async () => {
     const describer = fakeDescriber("a red bike");
     const { bot, generator } = build({
-      policy: { direct: "always" },
       describer,
+      policy: { direct: "always" },
     });
 
     await bot.handle(
       msg({
         media: [
           {
-            kind: "image",
             data: new Uint8Array([1, 2, 3]),
+            kind: "image",
             mime: "image/jpeg",
           },
         ],
-      }),
+      })
     );
 
     expect(describer.seen).toEqual([{ bytes: 3, mime: "image/jpeg" }]);
     expect(generator.calls[0]?.messages.at(-1)?.content).toBe(
-      "hi there [image: a red bike]",
+      "hi there [image: a red bike]"
     );
   });
 
   it("marks media as unavailable when the describer fails", async () => {
     const describer = {
-      async describe(): Promise<string> {
-        throw new Error("vision down");
+      describe(): Promise<string> {
+        return Promise.reject(new Error("vision down"));
       },
     };
     const { bot, generator } = build({
-      policy: { direct: "always" },
       describer,
+      policy: { direct: "always" },
     });
 
     await bot.handle(
       msg({
-        text: "",
         media: [
-          { kind: "sticker", data: new Uint8Array([1]), mime: "image/webp" },
+          { data: new Uint8Array([1]), kind: "sticker", mime: "image/webp" },
         ],
-      }),
+        text: "",
+      })
     );
 
     expect(generator.calls[0]?.messages.at(-1)?.content).toBe(
-      " [sticker: unavailable]",
+      " [sticker: unavailable]"
     );
   });
 });
@@ -312,7 +312,7 @@ describe("createPersona: admin commands and pause", () => {
     const { bot, channel, generator } = build({ policy: { direct: "always" } });
 
     const result = await bot.handle(
-      msg({ text: "!whois", senderId: "stranger" }),
+      msg({ senderId: "stranger", text: "!whois" })
     );
 
     expect(result).toEqual({ kind: "command" });
@@ -322,17 +322,17 @@ describe("createPersona: admin commands and pause", () => {
 
   it("lets an admin pause, blocks replies while paused, and resumes", async () => {
     const { bot, channel, generator } = build({
-      policy: { direct: "always" },
       admins: [admin],
+      policy: { direct: "always" },
     });
 
-    await bot.handle(msg({ id: "1", text: "!pause", senderId: admin }));
+    await bot.handle(msg({ id: "1", senderId: admin, text: "!pause" }));
     expect(bot.state.paused).toBe(true);
 
     const paused = await bot.handle(msg({ id: "2", text: "are you there?" }));
     expect(paused).toEqual({ kind: "skipped", reason: "paused" });
 
-    await bot.handle(msg({ id: "3", text: "!resume", senderId: admin }));
+    await bot.handle(msg({ id: "3", senderId: admin, text: "!resume" }));
     expect(bot.state.paused).toBe(false);
 
     const after = await bot.handle(msg({ id: "4", text: "back again" }));
@@ -343,12 +343,12 @@ describe("createPersona: admin commands and pause", () => {
 
   it("ignores !pause from a non-admin, so the message goes through the policy", async () => {
     const { bot, generator } = build({
-      policy: { direct: "always" },
       admins: [admin],
+      policy: { direct: "always" },
     });
 
     const result = await bot.handle(
-      msg({ text: "!pause", senderId: "stranger" }),
+      msg({ senderId: "stranger", text: "!pause" })
     );
 
     expect(bot.state.paused).toBe(false);
@@ -357,10 +357,10 @@ describe("createPersona: admin commands and pause", () => {
   });
 
   it("lets an admin resume even while paused, because commands run first", async () => {
-    const { bot } = build({ policy: { direct: "always" }, admins: [admin] });
+    const { bot } = build({ admins: [admin], policy: { direct: "always" } });
     bot.state.setPaused(true);
 
-    const result = await bot.handle(msg({ text: "!resume", senderId: admin }));
+    const result = await bot.handle(msg({ senderId: admin, text: "!resume" }));
 
     expect(result).toEqual({ kind: "command" });
     expect(bot.state.paused).toBe(false);
@@ -368,12 +368,12 @@ describe("createPersona: admin commands and pause", () => {
 
   it("runs !learn commands without calling the model", async () => {
     const { bot, generator } = build({
-      policy: { direct: "always" },
       admins: [admin],
+      policy: { direct: "always" },
     });
 
     const result = await bot.handle(
-      msg({ text: "!learn she likes green tea", senderId: admin }),
+      msg({ senderId: admin, text: "!learn she likes green tea" })
     );
 
     expect(result).toEqual({ kind: "command" });
@@ -398,13 +398,17 @@ describe("createPersona: prompt, patches and weights", () => {
 
     expect(bot.systemPrompt).toContain("Works as a nurse");
     expect(bot.systemPrompt).not.toBe(before);
-    const matches = bot.systemPrompt.match(/lives in são paulo/gi) ?? [];
+    const matches = bot.systemPrompt.match(PATTERN_1) ?? [];
     expect(matches).toHaveLength(1);
   });
 
   it("calls onPatch with the patch it was given", () => {
     const seen: unknown[] = [];
-    const { bot } = build({ onPatch: (p) => void seen.push(p) });
+    const { bot } = build({
+      onPatch: (p) => {
+        seen.push(p);
+      },
+    });
 
     bot.applyPatch({ phrases: ["bora"] });
 
@@ -415,10 +419,10 @@ describe("createPersona: prompt, patches and weights", () => {
     const { bot, generator } = build({ policy: { direct: "always" } });
 
     bot.setPromptWeights({
-      maxWords: 4,
       exampleBoost: 1,
-      styleGuideStrength: 1,
       extraRules: ["Never use emoji."],
+      maxWords: 4,
+      styleGuideStrength: 1,
     });
     await bot.handle(msg());
 
@@ -428,8 +432,12 @@ describe("createPersona: prompt, patches and weights", () => {
 
   it("notifies setRecallWeights and applies them to the memory", () => {
     const seen: unknown[] = [];
-    const { bot } = build({ setRecallWeights: (w) => void seen.push(w) });
-    const weights = { keywordWeight: 2, semanticWeight: 0.5, rrfK: 30 };
+    const { bot } = build({
+      setRecallWeights: (w) => {
+        seen.push(w);
+      },
+    });
+    const weights = { keywordWeight: 2, rrfK: 30, semanticWeight: 0.5 };
 
     bot.setRecallWeights(weights);
 
@@ -441,7 +449,7 @@ describe("createPersona: memory wiring", () => {
   it("keeps shared knowledge out of the history store", async () => {
     const memory = createMemory();
     await memory.learn("The bakery opens at 7am.");
-    const { bot } = build({ policy: { direct: "always" }, memory });
+    const { bot } = build({ memory, policy: { direct: "always" } });
 
     await bot.handle(msg());
 

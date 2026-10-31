@@ -51,7 +51,6 @@ Run a single file with `bunx vitest run <path>` from the package directory, or f
 | `cloudPayload(messages, phoneId)`, `textMessage(id, from, body)` | Cloud API webhook bodies. |
 | `silentLogger` | A logger that prints nothing. |
 
-`tests/helpers/cloudflare-workers.ts` stubs the `cloudflare:workers` module so the Worker can be imported in Node.
 
 ## Adding a test
 
@@ -63,16 +62,20 @@ Run a single file with `bunx vitest run <path>` from the package directory, or f
 
 ## Known bugs: the `it.fails` convention
 
-A known bug gets a test that expects the correct behavior and is marked `it.fails`.
-The suite stays green while the bug exists. When someone fixes it, the test starts
-failing, which is the signal to change `it.fails` to `it`.
+A known bug gets a test that expects the correct behavior and is marked `it.fails`. The suite
+stays green while the bug exists, and turns red once the bug is fixed. That is the signal to
+change `it.fails` to `it`.
 
-| Bug | Where it is pinned |
+No bugs are pinned right now. The regression tests that replaced them:
+
+| Problem | Test |
 |---|---|
-| `createPersona` ignores `prompt.maxWords` | `packages/persona/tests/known-issues.test.ts` |
-| `!learn` reports success without storing | `packages/policy/tests/known-issues.test.ts` |
-| Linked-device disconnects are reported as logged out | `packages/whatsapp/tests/baileys/connect-reconnect.test.ts` |
-| `bun run ingest` is documented but missing | `tests/contract/docs-cross-reference.test.ts` |
+| `prompt.maxWords` ignored | `packages/persona/tests/prompt-options.test.ts` |
+| `!learn` claimed success without storing | `packages/policy/tests/learn-command.test.ts` |
+| Transient disconnects reported as logouts | `packages/whatsapp/tests/connect-reconnect.test.ts` |
+| Learning never wired into the app; state not restored | `tests/integration/learning-wiring.test.ts`, `packages/learning/tests/bounds.test.ts` |
+| Pending outcomes unbounded | `packages/learning/tests/bounds.test.ts` |
+| Docs told users to run the removed `ingest` | `tests/contract/docs-cross-reference.test.ts` |
 
 Confirm an `it.fails` really fails for the documented reason before you trust it.
 Temporarily switch it to `it`, read the assertion, and switch it back.
@@ -91,8 +94,7 @@ When you rename an export, update the skill that lists it. The skills test will 
 
 - A contract failure in docs is usually drift. Fix the doc, or the code if the doc is right.
 - A pipeline failure with `kind: "failed"` often means a fake throws. Check `fakeChannel({ fail })` and the generator fixture.
-- A Worker test that makes no graph call usually means `fetch` was captured before a spy was installed. `CloudApiClient` reads `fetch` in its constructor.
-- A Cloud API bot that skips a DM is probably not addressed by name. Its `buildBot` policy is `addressed`.
+- A client test that makes no graph call usually means `fetch` was captured before a spy was installed. `WhatsappClient` reads `fetch` in its constructor.
 
 ## Exports
 

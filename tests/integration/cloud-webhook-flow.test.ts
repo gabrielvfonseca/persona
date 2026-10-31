@@ -1,9 +1,9 @@
 import { createPersona } from "@persona/persona";
 import {
-  CloudApiClient,
-  createCloudApiWebhook,
-  type ExecutionContextLike,
-} from "@persona/whatsapp/cloud";
+  type BackgroundTasks,
+  createWhatsappWebhook,
+  WhatsappClient,
+} from "@persona/whatsapp";
 import { describe, expect, it, vi } from "vitest";
 import {
   cloudPayload,
@@ -29,53 +29,51 @@ function stack(
     reply?: string;
     describer?: ReturnType<typeof fakeDescriber>;
     downloadMedia?: (id: string, maxBytes: number) => Promise<Uint8Array>;
-  } = {},
+  } = {}
 ) {
   const graphCalls: { url: string; init: RequestInit }[] = [];
-  const fetchStub = vi.fn(
-    async (url: string | URL | Request, init?: RequestInit) => {
-      graphCalls.push({ url: String(url), init: init ?? {} });
-      return new Response("{}", { status: 200 });
-    },
-  ) as unknown as typeof fetch;
-  const client = new CloudApiClient({
-    phoneNumberId: PHONE_ID,
+  const fetchStub = vi.fn((url: string | URL | Request, init?: RequestInit) => {
+    graphCalls.push({ init: init ?? {}, url: String(url) });
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  });
+  const client = new WhatsappClient({
     accessToken: "graph-token",
     fetch: fetchStub,
+    phoneNumberId: PHONE_ID,
   });
   const generator = fakeGenerator(opts.reply ?? "Hi there");
   const bot = createPersona({
-    persona: persona(),
     channel: client,
-    generator,
     describer: opts.describer,
+    generator,
     logger: silentLogger,
+    persona: persona(),
     policy: { direct: "always" },
   });
-  const webhook = createCloudApiWebhook({
-    bot,
+  const webhook = createWhatsappWebhook({
     appSecret: APP_SECRET,
-    verifyToken: VERIFY_TOKEN,
-    phoneNumberId: PHONE_ID,
+    bot,
     downloadMedia: opts.downloadMedia,
+    phoneNumberId: PHONE_ID,
+    verifyToken: VERIFY_TOKEN,
   });
   const post = (
     body: string,
     signature = sign(body, APP_SECRET),
-    ctx?: ExecutionContextLike,
+    ctx?: BackgroundTasks
   ) =>
     webhook(
       new Request("https://bot.test/webhook/whatsapp", {
-        method: "POST",
-        headers: {
-          "x-hub-signature-256": signature,
-          "content-type": "application/json",
-        },
         body,
+        headers: {
+          "content-type": "application/json",
+          "x-hub-signature-256": signature,
+        },
+        method: "POST",
       }),
-      ctx,
+      ctx
     );
-  return { webhook, post, graphCalls, generator, bot };
+  return { bot, generator, graphCalls, post, webhook };
 }
 
 describe("webhook verification (GET)", () => {
@@ -84,8 +82,8 @@ describe("webhook verification (GET)", () => {
 
     const res = await webhook(
       new Request(
-        `https://bot.test/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=${VERIFY_TOKEN}&hub.challenge=4242`,
-      ),
+        `https://bot.test/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=${VERIFY_TOKEN}&hub.challenge=4242`
+      )
     );
 
     expect(res.status).toBe(200);
@@ -97,8 +95,8 @@ describe("webhook verification (GET)", () => {
 
     const res = await webhook(
       new Request(
-        "https://bot.test/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=4242",
-      ),
+        "https://bot.test/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=4242"
+      )
     );
 
     expect(res.status).toBe(403);
@@ -108,7 +106,7 @@ describe("webhook verification (GET)", () => {
     const { webhook } = stack();
 
     const res = await webhook(
-      new Request("https://bot.test/webhook/whatsapp", { method: "PUT" }),
+      new Request("https://bot.test/webhook/whatsapp", { method: "PUT" })
     );
 
     expect(res.status).toBe(405);
@@ -129,15 +127,15 @@ describe("message flow (POST)", () => {
     expect(generator.calls[0]?.messages.at(-1)?.content).toBe("oi, tudo bem?");
     expect(graphCalls).toHaveLength(1);
     expect(graphCalls[0]?.url).toBe(
-      `https://graph.facebook.com/v22.0/${PHONE_ID}/messages`,
+      `https://graph.facebook.com/v22.0/${PHONE_ID}/messages`
     );
     const sent = JSON.parse(String(graphCalls[0]?.init.body));
     expect(sent).toMatchObject({
+      context: { message_id: "wamid.1" },
       messaging_product: "whatsapp",
+      text: { body: "Hi there" },
       to: "5511888888888",
       type: "text",
-      text: { body: "Hi there" },
-      context: { message_id: "wamid.1" },
     });
   });
 
@@ -146,8 +144,8 @@ describe("message flow (POST)", () => {
 
     await post(cloudPayload([textMessage("wamid.1", "5511888888888", "oi")]));
 
-    const headers = graphCalls[0]?.init.headers as Record<string, string>;
-    expect(headers.Authorization).toBe("Bearer graph-token");
+    const headers = new Headers(graphCalls[0]?.init.headers);
+    expect(headers.get("Authorization")).toBe("Bearer graph-token");
   });
 
   it("rejects a body whose signature does not match, and does not reply", async () => {
@@ -166,9 +164,9 @@ describe("message flow (POST)", () => {
 
     const res = await webhook(
       new Request("https://bot.test/webhook/whatsapp", {
-        method: "POST",
         body: cloudPayload([textMessage("wamid.1", "5511888888888", "oi")]),
-      }),
+        method: "POST",
+      })
     );
 
     expect(res.status).toBe(403);
@@ -178,7 +176,7 @@ describe("message flow (POST)", () => {
     const { post, graphCalls, generator } = stack();
     const body = cloudPayload(
       [textMessage("wamid.1", "5511888888888", "oi")],
-      "SOMEONE_ELSE",
+      "SOMEONE_ELSE"
     );
 
     const res = await post(body);
@@ -200,10 +198,8 @@ describe("message flow (POST)", () => {
   it("answers OK to a payload with no messages, such as a status update", async () => {
     const { post, generator } = stack();
     const body = JSON.stringify({
-      object: "whatsapp_business_account",
       entry: [
         {
-          id: "WABA_1",
           changes: [
             {
               field: "messages",
@@ -217,8 +213,10 @@ describe("message flow (POST)", () => {
               },
             },
           ],
+          id: "WABA_1",
         },
       ],
+      object: "whatsapp_business_account",
     });
 
     const res = await post(body);
@@ -232,22 +230,22 @@ describe("message flow (POST)", () => {
     const downloads: { id: string; maxBytes: number }[] = [];
     const { post, generator } = stack({
       describer,
-      downloadMedia: async (id, maxBytes) => {
+      downloadMedia: (id, maxBytes) => {
         downloads.push({ id, maxBytes });
-        return JPEG;
+        return Promise.resolve(JPEG);
       },
     });
     const body = cloudPayload([
       {
         from: "5511888888888",
         id: "wamid.img",
-        timestamp: "1700000000",
-        type: "image",
         image: {
+          caption: "look at this",
           id: "MEDIA_9",
           mime_type: "image/jpeg",
-          caption: "look at this",
         },
+        timestamp: "1700000000",
+        type: "image",
       },
     ]);
 
@@ -258,7 +256,7 @@ describe("message flow (POST)", () => {
       { bytes: JPEG.byteLength, mime: "image/jpeg" },
     ]);
     expect(generator.calls[0]?.messages.at(-1)?.content).toBe(
-      "look at this [image: a sunset over the sea]",
+      "look at this [image: a sunset over the sea]"
     );
   });
 
@@ -266,15 +264,15 @@ describe("message flow (POST)", () => {
     const describer = fakeDescriber();
     const { post, generator } = stack({
       describer,
-      downloadMedia: async () => JPEG,
+      downloadMedia: () => Promise.resolve(JPEG),
     });
     const body = cloudPayload([
       {
         from: "5511888888888",
         id: "wamid.st",
+        sticker: { id: "MEDIA_3", mime_type: "image/webp" },
         timestamp: "1700000000",
         type: "sticker",
-        sticker: { id: "MEDIA_3", mime_type: "image/webp" },
       },
     ]);
 
@@ -289,42 +287,40 @@ describe("message flow (POST)", () => {
     const describer = fakeDescriber("a waving cat");
     const { post, generator } = stack({
       describer,
-      downloadMedia: async () => WEBP,
+      downloadMedia: () => Promise.resolve(WEBP),
     });
     const body = cloudPayload([
       {
         from: "5511888888888",
         id: "wamid.st",
+        sticker: { id: "MEDIA_3", mime_type: "image/webp" },
         timestamp: "1700000000",
         type: "sticker",
-        sticker: { id: "MEDIA_3", mime_type: "image/webp" },
       },
     ]);
 
     await post(body);
 
     expect(generator.calls[0]?.messages.at(-1)?.content).toBe(
-      " [sticker: a waving cat]",
+      " [sticker: a waving cat]"
     );
   });
 
   it("still answers the caption when the image download fails", async () => {
     const { post, generator } = stack({
-      downloadMedia: async () => {
-        throw new Error("graph 500");
-      },
+      downloadMedia: () => Promise.reject(new Error("graph 500")),
     });
     const body = cloudPayload([
       {
         from: "5511888888888",
         id: "wamid.img",
-        timestamp: "1700000000",
-        type: "image",
         image: {
+          caption: "look at this",
           id: "MEDIA_9",
           mime_type: "image/jpeg",
-          caption: "look at this",
         },
+        timestamp: "1700000000",
+        type: "image",
       },
     ]);
 
@@ -333,10 +329,10 @@ describe("message flow (POST)", () => {
     expect(generator.calls[0]?.messages.at(-1)?.content).toBe("look at this");
   });
 
-  it("hands the work to waitUntil when a Workers context is present", async () => {
+  it("hands the work to waitUntil when a background context is present", async () => {
     const { post, graphCalls } = stack();
     const pending: Promise<unknown>[] = [];
-    const ctx: ExecutionContextLike = {
+    const ctx: BackgroundTasks = {
       waitUntil: (p) => {
         pending.push(p);
       },
@@ -345,7 +341,7 @@ describe("message flow (POST)", () => {
     const res = await post(
       cloudPayload([textMessage("wamid.1", "5511888888888", "oi")]),
       undefined,
-      ctx,
+      ctx
     );
 
     expect(res.status).toBe(200);

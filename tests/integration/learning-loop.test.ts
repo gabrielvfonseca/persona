@@ -1,8 +1,4 @@
-import type {
-  LearningState,
-  PersonaPatch,
-  ReplyGenerator,
-} from "@persona/core";
+import type { PersonaPatch } from "@persona/core";
 import {
   defaultLearningState,
   LearningEngine,
@@ -18,15 +14,22 @@ import {
   silentLogger,
 } from "../helpers/fakes";
 
+const PATTERN_1 = /Be concise/u;
+
 function mapStore(
-  initial?: string,
+  initial?: string
 ): LearningStore & { data: Map<string, string> } {
   const data = new Map<string, string>();
-  if (initial !== undefined) data.set("learning:state", initial);
+  if (initial !== undefined) {
+    data.set("learning:state", initial);
+  }
   return {
     data,
-    get: async (key) => data.get(key) ?? null,
-    set: async (key, value) => void data.set(key, value),
+    get: (key) => Promise.resolve(data.get(key) ?? null),
+    set: (key, value) => {
+      data.set(key, value);
+      return Promise.resolve();
+    },
   };
 }
 
@@ -35,43 +38,40 @@ async function learningBot(
   opts: {
     store?: LearningStore;
     reply?: string;
-    generator?: ReplyGenerator;
+    generator?: ReturnType<typeof fakeGenerator>;
     warmup?: number;
     step?: number;
-  } = {},
+  } = {}
 ) {
   const store = opts.store ?? mapStore();
   const patches: PersonaPatch[] = [];
   let bot: ConfiguredPersona | undefined;
   const system = await LearningSystem.create({
-    store,
     engine: new LearningEngine(defaultLearningState(), {
-      warmup: opts.warmup ?? 0,
-      step: opts.step ?? 1,
       distillEvery: 1000,
+      step: opts.step ?? 1,
+      warmup: opts.warmup ?? 0,
     }),
     onPatch: (patch) => {
       patches.push(patch);
       bot?.applyPatch(patch);
     },
+    store,
   });
   const channel = fakeChannel();
-  const generator = (opts.generator ??
-    fakeGenerator(opts.reply ?? "Sure thing")) as ReturnType<
-    typeof fakeGenerator
-  >;
+  const generator = opts.generator ?? fakeGenerator(opts.reply ?? "Sure thing");
   bot = createPersona({
-    persona: persona(),
     channel,
     generator,
-    logger: silentLogger,
-    policy: { direct: "always" },
     learning: system,
+    logger: silentLogger,
+    persona: persona(),
+    policy: { direct: "always" },
   });
-  return { bot, system, store, patches, channel, generator };
+  return { bot, channel, generator, patches, store, system };
 }
 
-const msg = (id: string, text: string) => ({ id, chatId: "chat-1", text });
+const msg = (id: string, text: string) => ({ chatId: "chat-1", id, text });
 
 describe("learning observes the real pipeline", () => {
   it("raises prompt weights after a replied turn", async () => {
@@ -83,11 +83,9 @@ describe("learning observes the real pipeline", () => {
   });
 
   it("lowers prompt weights after a failed turn", async () => {
-    const generator = {
-      async generate(): Promise<string> {
-        throw new Error("model down");
-      },
-    };
+    const generator = fakeGenerator(() => {
+      throw new Error("model down");
+    });
     const { bot, system } = await learningBot({ generator });
 
     await bot.handle(msg("1", "hi"));
@@ -95,21 +93,40 @@ describe("learning observes the real pipeline", () => {
     expect(system.getState().prompt.maxWords).toBe(14);
   });
 
-  it("leaves weights alone for commands and skipped messages", async () => {
+  it("leaves weights alone for commands", async () => {
     const { bot, system, generator } = await learningBot();
 
     await bot.handle(msg("1", "!whois"));
-    await bot.handle({
-      id: "2",
-      chatId: "group-1",
-      text: "anyone up for lunch?",
-      isGroup: true,
-      senderName: "Bia",
-    });
 
-    // Neither path calls the model, so the learning observer is not fed.
     expect(generator.calls).toHaveLength(0);
     expect(system.getState().prompt.maxWords).toBe(15);
+    expect(system.getState().contexts?.dm).toBeUndefined();
+  });
+
+  it("nudges the group context when the bot correctly stays quiet", async () => {
+    const { bot, system, generator } = await learningBot({ step: 1 });
+
+    await bot.handle({
+      chatId: "group-1",
+      id: "2",
+      isGroup: true,
+      senderName: "Bia",
+      text: "anyone up for lunch?",
+    });
+
+    // The group policy is "addressed", so the bot never calls the model.
+    expect(generator.calls).toHaveLength(0);
+    expect(
+      system.getState().contexts?.group?.recall.semanticWeight
+    ).toBeCloseTo(1.3);
+  });
+
+  it("nudges the DM context after a replied turn", async () => {
+    const { bot, system } = await learningBot();
+
+    await bot.handle(msg("1", "hi"));
+
+    expect(system.getState().contexts?.dm?.prompt.maxWords).toBe(16);
   });
 
   it("moves prompt weights after a good rating once warmup is reached", async () => {
@@ -122,7 +139,7 @@ describe("learning observes the real pipeline", () => {
   });
 
   it("does not move weights during warmup", async () => {
-    const { system } = await learningBot({ warmup: 5, step: 1 });
+    const { system } = await learningBot({ step: 1, warmup: 5 });
 
     await system.addRating("r-1", "chat-1", 1);
 
@@ -174,7 +191,7 @@ describe("distillation", () => {
     await system.addRating("r-3", "chat-1", 1);
     const patch = await system.distill();
 
-    expect(patch.styleGuide).toMatch(/Be concise/);
+    expect(patch.styleGuide).toMatch(PATTERN_1);
   });
 
   it("does not add a style guide when ratings are mostly good", async () => {
@@ -198,16 +215,16 @@ describe("fine-tune dataset", () => {
     expect(entries).toHaveLength(2);
     expect(entries[0]?.completion).toBe("Sure thing");
     expect(entries[0]?.messages.at(-1)).toEqual({
-      role: "user",
       content: "first",
+      role: "user",
     });
     expect(entries[1]?.messages.at(-1)).toEqual({
-      role: "user",
       content: "second",
+      role: "user",
     });
     expect(entries[1]?.historyTurns).toEqual([
-      { role: "user", content: "first" },
-      { role: "assistant", content: "Sure thing" },
+      { content: "first", role: "user" },
+      { content: "Sure thing", role: "assistant" },
     ]);
     expect(entries[0]?.system).toContain("You are Ana.");
   });
@@ -230,18 +247,15 @@ describe("persistence", () => {
     await system.addRating("r-1", "chat-1", 1);
     await system.addRating("r-2", "chat-1", -1);
 
-    const saved = JSON.parse(
-      store.data.get("learning:state") ?? "{}",
-    ) as LearningState;
-    expect(saved.goodCount).toBe(1);
-    expect(saved.badCount).toBe(1);
-    expect(saved.feedbackCount).toBe(2);
+    const saved: unknown = JSON.parse(store.data.get("learning:state") ?? "{}");
+    expect(saved).toMatchObject({ badCount: 1, goodCount: 1 });
+    expect(saved).toMatchObject({ feedbackCount: 2 });
 
     const reloaded = await LearningSystem.create({ store });
     expect(reloaded.getState()).toMatchObject({
-      goodCount: 1,
       badCount: 1,
       feedbackCount: 2,
+      goodCount: 1,
     });
   });
 

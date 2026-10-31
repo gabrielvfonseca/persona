@@ -9,7 +9,7 @@ modules:
 
 `createMemory()` returns everything a bot keeps between messages in one object.
 It is in-process by default. Persist it by passing your own stores (see
-[persona-kv](../persona-kv/SKILL.md)).
+`@persona/postgres`).
 
 ## createMemory
 
@@ -101,5 +101,5 @@ The learning engine tunes those three weights (see [persona-learning](../persona
 ## Related
 
 - Pipeline that calls these: [persona-sdk](../persona-sdk/SKILL.md)
-- Persisting them to KV: [persona-kv](../persona-kv/SKILL.md)
+- Persisting them to KV: `@persona/postgres`
 - Unit tests: `tests/unit/pure-functions.test.ts`, `packages/memory/tests/`

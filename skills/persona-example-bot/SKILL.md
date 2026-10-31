@@ -1,11 +1,12 @@
 ---
 name: persona-example-bot
-description: Configure, run, test and deploy examples/bot, the reference app that wires the SDK to OpenRouter and WhatsApp in two modes, a linked device on Node and the Cloud API on Cloudflare Workers. Covers the .env schema, buildBot policy differences, Worker routes and secrets, wrangler config, and the admin basic auth.
+description: Configure, run, train and deploy examples/bot, the reference app that runs a local ggml-node model and a WhatsApp linked device inside a Docker container with Postgres (pgvector). Covers the .env schema, buildBot, the container and volumes, the TTL sweep, the ingest API, group memory ranking, and LoRA training.
 modules:
   - examples/bot/src/config.ts
   - examples/bot/src/bot.ts
-  - examples/bot/src/auth.ts
   - examples/bot/src/persona-file.ts
+  - examples/bot/src/memory/group-index.ts
+  - examples/bot/src/training/pipeline.ts
 ---
 
 # persona-example-bot
@@ -13,133 +14,139 @@ modules:
 `examples/bot` is the only app in the repo. It is the one place that picks a model
 provider and decides who the bot answers. Everything else is a library.
 
+It runs in a container. There is no Cloudflare runtime in the repo any more.
+
 ## Layout
 
 | File | Role |
 |---|---|
-| `src/config.ts` | zod schemas for env, `parseConfig`, `csv`. |
+| `src/config.ts` | `configSchema` (zod), `parseConfig`, `csv`. |
 | `src/bot.ts` | `buildBot`: wires config, persona, channel and policy into `createPersona`. |
-| `src/model.ts` | OpenRouter generator, describer and embedder. |
+| `src/model.ts`, `src/local-model.ts` | Model ids, and the local ggml-node generator. |
 | `src/persona-file.ts` | `loadPersona` reads and validates `PERSONA_FILE`. |
-| `src/node.ts` | Linked-device entry point (`bun run bot`). |
-| `src/worker.ts` | Cloud API Worker: webhook, admin proxy, `/admin/persona`. |
-| `src/connection.ts` | `WhatsAppConnection` Durable Object. Answers `/status` only. |
-| `src/auth.ts` | `basicAuth` for the admin routes. Constant-time password compare. |
+| `src/node.ts` | The container entry point (`bun run bot`). Opens Postgres, runs the sweep, connects WhatsApp. |
+| `src/learning.ts` | Learning wiring. Stores state and dataset exports in the Postgres `kv` table. |
+| `src/memory/` | Postgres memory (`pg-memory.ts`) and the group memory index. |
+| `src/api/app.ts` | The ingest API, served by `node.ts` when `API_PORT` is set. |
 | `scripts/simulate.ts` | Offline run with a fake model and a console channel. |
-| `scripts/groups.ts` | Lists WhatsApp groups for a linked device. |
+| `scripts/groups.ts` | Lists WhatsApp groups for the linked device. |
 | `data/persona.example.json` | Example persona. Copy it to `data/persona.json` for real use. |
+| `Dockerfile`, `../../docker/compose.yaml` | The image, and the bot plus Postgres. |
 
 ## Scripts
 
 ```bash
-bun run --cwd examples/bot simulate   # offline, no keys
-bun run --cwd examples/bot bot        # linked device (Baileys), needs .env
+bun run --cwd examples/bot simulate   # offline, no keys, no database
+bun run --cwd examples/bot bot        # the linked device, needs .env and DATABASE_URL
 bun run --cwd examples/bot groups     # list groups for the linked device
-bun run --cwd examples/bot dev        # wrangler dev (Worker)
+bun run --cwd examples/bot dev        # bun --watch src/node.ts
 bun run --cwd examples/bot check      # biome
 bun run --cwd examples/bot typecheck
 bun run --cwd examples/bot test
 ```
 
-Set up the environment with `bun scripts/index.ts setup` from the repo root. It
-copies `.env.example` to `.env`, and runs `bun install` when `node_modules` is missing.
+Set up the environment with `bun scripts/index.ts setup` from the repo root. It copies
+`.env.example` to `.env`, and runs `bun install` when `node_modules` is missing.
 
 ## Configuration
 
-`parseConfig(env, "linked-device" | "cloud-api")` validates the environment and
-reports every problem at once. The Cloud API schema has the same keys as the
-linked-device schema, plus the `WHATSAPP_*` secrets and `ADMIN_KEY`.
+`parseConfig(env)` validates the environment and reports every problem at once.
 
-Required in both modes: `PERSONA_CONSENT` (exactly `true`), `PERSONA_NAME`,
-`PERSONA_MODEL`, `OPENROUTER_API_KEY`.
+Required: `PERSONA_CONSENT` (exactly `true`), `PERSONA_NAME` and `DATABASE_URL` (a Postgres
+URL). `PERSONA_MODEL` is optional: a registry id (`qwen2.5-0.5b`, `qwen2.5-1.5b`,
+`smollm2-360m`) or a `.gguf` path. Unset, it uses the active fine-tuned model in
+`data/models/active.json`, else `qwen2.5-0.5b`.
 
 Optional, with defaults: `PERSONA_FILE` (`data/persona.json`), `ADMIN_NUMBERS`,
-`MAX_PER_10MIN` (5, range 1 to 100), `STICKER_MODEL`, `EMBEDDING_MODEL`,
-`RECALL_LIMIT` (4, range 0 to 20), `LEARNING_*` (see below), `AUTH_DIR` (`.auth`,
-linked device only).
+`MAX_PER_10MIN` (5, range 1 to 100), `MODEL_CONTEXT` (4096),
+`MEMORY_MAX_NODES` (50000), `API_PORT` and `API_KEY` (no API unless `API_PORT` is set),
+`RECALL_LIMIT` (4, range 0 to 20), `LEARNING_*` (see below), `AUTH_DIR` (`.auth`).
 
 Learning variables: `LEARNING_ENABLED` must be `"true"` when set. `LEARNING_WARMUP`
 (5), `LEARNING_STEP` (0.5), `LEARNING_DISTILL_EVERY` (20) and `LEARNING_MAX_PATCH` (5)
-tune it. `buildBot` does not yet pass these to a `LearningSystem`, so setting them has no effect in the app today.
+tune it.
 
-The full table is in `docs/DEPLOYMENT.md`. `.env.example` lists every key, and a
-contract test keeps all three in sync.
+The full table is in `docs/DEPLOYMENT.md`. `.env.example` lists every key, and a contract
+test keeps all three in sync.
+
+## Container
+
+`docker/compose.yaml` runs two services: `postgres` (pgvector) and `persona-bot`, which is
+built from `examples/bot/Dockerfile` and runs `src/node.ts`. The bot waits for Postgres to be
+healthy. The session credentials (`.auth`) and the persona file (`data`) are volumes, not
+image contents. See [DEPLOYMENT.md](../../docs/DEPLOYMENT.md).
+
+## Postgres
+
+Everything that used to be a file or a Cloudflare binding lives in Postgres:
+
+- `kv` table: chat history, dedupe keys, rate-limit windows, the pause flag, learning state
+  and dataset exports. `PgKVStorage` enforces TTLs on read. `node.ts` sweeps expired rows at
+  startup, every 10 minutes, and on writes (`@persona/postgres`).
+- `pg_nodes` and `pg_edges`: memory nodes with `vector(384)` embeddings and graph edges.
+  `PgNodeStore` refuses embeddings of any other width.
+
+Schema changes go in `packages/postgres/migrations/`. Every statement is idempotent, and
+migrations run under an advisory lock on each start.
 
 ## buildBot: the behavior switch
 
 `buildBot` is the only place that decides how the bot behaves:
 
-- Direct chats: `always` on the linked device, `addressed` on the Cloud API.
+- Direct chats: always answered, since this is a linked device.
 - Groups: always `addressed`.
 - Admins: `csv(ADMIN_NUMBERS)`.
-- Memory: an in-memory `createMemory` with `MAX_PER_10MIN`, unless you pass `memory`.
-- Embedder: only when `EMBEDDING_MODEL` is set.
-- Describer: only when `STICKER_MODEL` is set.
+- Generator: passed in by the caller. `node.ts` passes the local model.
+- Memory: passed in by the caller. `node.ts` passes Postgres memory wrapped with
+  `createGroupMemory`, so recall also searches the group index.
 
-Pass `memory` in to swap in KV (the Worker does this).
+## Model (`model.ts`, `local-model.ts`)
 
-## Model adapters (`model.ts`)
+- `model.ts` is pure: registry ids and `toModelSource`.
+- `local-model.ts` imports `ggml-node` and is Node-only. `createLocalModel` loads the model on
+  the first reply, with `maxTokens` 60 and `temperature` 0.2.
+- The tests inject a stub generator (see `tests/integration/example-bot-wiring.test.ts`).
 
-- `openRouterGenerator`: `generateText` with `maxOutputTokens: 60` and `temperature: 0.2`.
-- `openRouterDescriber`: a vision model, one short description per image.
-- `openRouterEmbedder`: OpenRouter's embeddings endpoint. Sorts results by `index`.
+## Group memory and the ingest API (`memory/`, `api/`)
 
-The tests replace these with fakes (see `tests/integration/example-bot-wiring.test.ts`).
+- `group-import.ts` parses an export into records, and skips media, links and short text.
+  Each record id is a hash, so re-imports are idempotent.
+- `group-index.ts` ranks by keyword (required), quality, window size and recency.
+- `group-store.ts` keeps group records in the Postgres `group_records` table (`pgGroupStore`). `memoryGroupStore` is the in-memory version for tests.
+- `api/app.ts` serves `/v1/persona`, `/v1/memory/groups` and search, behind a bearer key.
+
+## Training (`training/`, `scripts/train.ts`)
+
+`bun run train` builds a chat-format dataset from the persona's example exchanges, runs LoRA
+with `mlx-lm`, fuses, converts to GGUF with llama.cpp, and promotes the result only if its
+validation loss beats the base and the active model. Use `--dry-run` to check the plan.
 
 ## Linked device (`node.ts`)
 
-`bun run bot` loads the persona, builds the bot once, and connects with
-`connectBaileys`. The channel forwards replies to whichever socket is open, so the
-history and pause state survive reconnects. It stops cleanly on SIGINT and SIGTERM.
-
-## Cloud API Worker (`worker.ts`)
-
-| Route | Auth | What it does |
-|---|---|---|
-| `GET /webhook/whatsapp` | Meta handshake | Verification challenge. |
-| `POST /webhook/whatsapp` | `X-Hub-Signature-256` | Message webhook. |
-| `ANY /cf-bot/*` | Basic, `ADMIN_KEY` | Proxied to the `WhatsAppConnection` Durable Object with the prefix stripped. |
-| `GET /admin/persona` | Basic, `ADMIN_KEY` | Returns `{ ok, name }`. |
-
-The Worker reads the persona from the `PERSONA_JSON` secret, so the bundle has no data file.
-History, dedupe, rate limits and pause state live in the `CONVERSATIONS` KV namespace
-(see [persona-kv](../persona-kv/SKILL.md)). After each message it flushes the pause state.
-
-## Deploy the Worker
-
-```bash
-cd examples/bot
-wrangler secret put OPENROUTER_API_KEY
-wrangler secret put PERSONA_JSON < data/persona.json
-# ...and the other secrets listed in wrangler.toml
-wrangler deploy
-bunx wrangler deploy --dry-run        # bundle check without deploying
-```
-
-Do not add `[vars]` to `wrangler.toml`. It would overwrite dashboard values on deploy.
-Set `PERSONA_CONSENT`, `PERSONA_NAME` and `PERSONA_MODEL` as secrets.
+`bun run bot` opens Postgres, loads the persona, builds the bot once, and connects with
+`connectWhatsappSocket`. The channel forwards replies to whichever socket is open, so history
+and pause state survive reconnects. Pause state is read on every message, so a pause set from
+another process applies. It stops cleanly on SIGINT and SIGTERM.
 
 ## Gotchas
 
-- `loadPersona` tells users to run `bun run ingest`. That command no longer exists. See [persona-schemas](../persona-schemas/SKILL.md).
-- The Durable Object only answers `/status`. Linked-device sessions on Workers are not running yet (see the Durable Object note in `docs/DEPLOYMENT.md`).
+- `buildBot` is async. Await it. Without a learning store, learning lives in memory and
+  `buildBot` logs a warning.
+- The persona file is written by hand. See [persona-schemas](../persona-schemas/SKILL.md).
 - Only one linked-device process per WhatsApp account.
-- The Worker's Durable Object id is hard-coded as `main-v11`. Change it in one place if you rename the namespace.
-- `src/connection.ts` imports `cloudflare:workers`. Node tests must stub it (the root vitest config does).
+- The `api` and `groups` scripts read the same environment, so they need `DATABASE_URL` too.
 
 ## Exports
 
+- `configSchema`
 - `parseConfig`
 - `csv`
-- `linkedDeviceSchema`
-- `cloudApiSchema`
 - `buildBot`
-- `basicAuth`
 - `loadPersona`
 
 ## Related
 
 - SDK options: [persona-sdk](../persona-sdk/SKILL.md)
 - Transports: [persona-whatsapp](../persona-whatsapp/SKILL.md)
-- Storage: [persona-kv](../persona-kv/SKILL.md)
-- Tests: `tests/unit/example-config.test.ts`, `tests/integration/example-bot-wiring.test.ts`, `tests/integration/worker-entry.test.ts`, `examples/bot/tests/`
+- Storage: `@persona/postgres`
+- Tests: `tests/unit/example-config.test.ts`, `tests/integration/example-bot-wiring.test.ts`, `examples/bot/tests/`

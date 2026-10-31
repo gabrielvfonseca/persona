@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { isValidSignature } from "../../src/cloud/signature";
+import { isValidSignature } from "../src/signature";
 
 const SECRET = "app-secret";
 const sign = (body: string, secret = SECRET) =>

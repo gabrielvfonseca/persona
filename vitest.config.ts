@@ -10,15 +10,7 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^cloudflare:workers$/,
-        replacement: src("./tests/helpers/cloudflare-workers.ts"),
-      },
-      {
-        find: /^@persona\/whatsapp\/(cloud|baileys)$/,
-        replacement: src("./packages/whatsapp/src/$1/index.ts"),
-      },
-      {
-        find: /^@persona\/(core|schemas|memory|policy|persona|learning|kv)$/,
+        find: /^@persona\/(?<g1>core|schemas|memory|policy|persona|learning|postgres|whatsapp)$/u,
         replacement: src("./packages/$1/src/index.ts"),
       },
     ],

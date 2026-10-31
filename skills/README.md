@@ -14,7 +14,6 @@ the code fails the test until the skill is updated.
 | [persona-policy](persona-policy/SKILL.md) | You decide when the bot replies, or add or change admin commands. |
 | [persona-learning](persona-learning/SKILL.md) | You work on outcomes, ratings, weight tuning, distillation or the dataset. |
 | [persona-schemas](persona-schemas/SKILL.md) | You read or write the persona file format. |
-| [persona-kv](persona-kv/SKILL.md) | You store state in Workers KV or a key-value store. |
 | [persona-whatsapp](persona-whatsapp/SKILL.md) | You connect a transport: Cloud API webhook or linked device (Baileys). |
 | [persona-example-bot](persona-example-bot/SKILL.md) | You configure, run, or deploy `examples/bot`. |
 | [persona-testing](persona-testing/SKILL.md) | You run, add or triage tests, or check docs against code. |

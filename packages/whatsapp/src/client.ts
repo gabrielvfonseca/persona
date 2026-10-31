@@ -1,31 +1,38 @@
 import type { Channel } from "@persona/core";
 
-export class CloudApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-    public body?: unknown,
-  ) {
+/** The part of `fetch` the client uses. The global `fetch` and test stubs both satisfy it. */
+export type FetchLike = (
+  input: string | URL,
+  init?: RequestInit
+) => Promise<Response>;
+
+export class WhatsappError extends Error {
+  readonly status: number;
+  readonly body?: unknown;
+
+  constructor(status: number, message: string, body?: unknown) {
     super(message);
-    this.name = "CloudApiError";
+    this.status = status;
+    this.body = body;
+    this.name = "WhatsappError";
   }
 }
 
-export interface CloudApiClientOpts {
-  phoneNumberId: string;
+export interface WhatsappClientOpts {
   accessToken: string;
+  fetch?: FetchLike | undefined;
   graphVersion?: string | undefined;
-  fetch?: typeof fetch | undefined;
+  phoneNumberId: string;
 }
 
-export class CloudApiClient implements Channel {
-  readonly name = "cloud-api";
+export class WhatsappClient implements Channel {
+  readonly name = "whatsapp";
   private readonly phoneNumberId: string;
   private readonly accessToken: string;
   private readonly graphVersion: string;
-  private readonly fetch: typeof fetch;
+  private readonly fetch: FetchLike;
 
-  constructor(opts: CloudApiClientOpts) {
+  constructor(opts: WhatsappClientOpts) {
     this.phoneNumberId = opts.phoneNumberId;
     this.accessToken = opts.accessToken;
     this.graphVersion = opts.graphVersion ?? "v22.0";
@@ -36,11 +43,13 @@ export class CloudApiClient implements Channel {
     const url = `https://graph.facebook.com/${this.graphVersion}/${this.phoneNumberId}/messages`;
     const body: Record<string, unknown> = {
       messaging_product: "whatsapp",
+      text: { body: text },
       to: chatId,
       type: "text",
-      text: { body: text },
     };
-    if (replyTo) body.context = { message_id: replyTo };
+    if (replyTo) {
+      body.context = { message_id: replyTo };
+    }
 
     const res = await this.fetch(url, {
       body: JSON.stringify(body),
@@ -58,10 +67,10 @@ export class CloudApiClient implements Channel {
       } catch {
         bodyText = undefined;
       }
-      throw new CloudApiError(
+      throw new WhatsappError(
         res.status,
         `WhatsApp send failed: ${res.statusText}`,
-        bodyText,
+        bodyText
       );
     }
   }
@@ -91,12 +100,12 @@ export class CloudApiClient implements Channel {
     const auth = { Authorization: `Bearer ${this.accessToken}` };
     const metaRes = await this.fetch(
       `https://graph.facebook.com/${this.graphVersion}/${id}`,
-      { headers: auth },
+      { headers: auth }
     );
     if (!metaRes.ok) {
-      throw new CloudApiError(
+      throw new WhatsappError(
         metaRes.status,
-        `Media lookup failed: ${metaRes.statusText}`,
+        `Media lookup failed: ${metaRes.statusText}`
       );
     }
     const meta = (await metaRes.json()) as {
@@ -104,22 +113,22 @@ export class CloudApiClient implements Channel {
       file_size?: unknown | undefined;
     };
     if (typeof meta.url !== "string") {
-      throw new CloudApiError(502, "Media lookup returned no url");
+      throw new WhatsappError(502, "Media lookup returned no url");
     }
     if (typeof meta.file_size === "number" && meta.file_size > maxBytes) {
-      throw new CloudApiError(413, "Media is larger than the limit");
+      throw new WhatsappError(413, "Media is larger than the limit");
     }
 
     const fileRes = await this.fetch(meta.url, { headers: auth });
     if (!fileRes.ok) {
-      throw new CloudApiError(
+      throw new WhatsappError(
         fileRes.status,
-        `Media download failed: ${fileRes.statusText}`,
+        `Media download failed: ${fileRes.statusText}`
       );
     }
     const bytes = new Uint8Array(await fileRes.arrayBuffer());
     if (bytes.byteLength > maxBytes) {
-      throw new CloudApiError(413, "Media is larger than the limit");
+      throw new WhatsappError(413, "Media is larger than the limit");
     }
     return bytes;
   }

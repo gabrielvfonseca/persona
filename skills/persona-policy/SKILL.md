@@ -63,7 +63,7 @@ const commands = createCommands({
 | `!bad [comment]` | admins | Rates the last reply -1 with an optional comment. |
 | `!weights` | admins | Returns the learning weights through `onWeights`. |
 | `!dataset` | admins | Returns the fine-tune dataset export through `onDataset`. |
-| `!learn <fact>` | admins | Intended to add a fact. **Currently replies "Learned." and stores nothing.** |
+| `!learn <fact>` | admins | Adds the fact to the persona through `onLearn`, and replies "Learned." only after it is stored. Without a hook it replies "Fact storage is not enabled." |
 | `!distill` | admins | Runs distillation through `onDistill`. |
 
 How matching works:
@@ -83,11 +83,11 @@ How matching works:
 2. Give the handler the `args` array and `ctx.chatId`. Return a string to reply, or `undefined` for silence.
 3. Cover the admin and non-admin paths in `packages/policy/tests/commands.test.ts`.
 
-## Known issue
+## Hooks
 
-`!learn` claims success without storing anything, because `CommandsOptions` has no
-hook for it. The reproduction is `packages/policy/tests/known-issues.test.ts`. Fix
-it by adding an `onLearn` callback and wiring it to `memory.learn` or the persona.
+`createCommands` takes `onRate`, `onWeights`, `onDataset` (sync or async), `onDistill`,
+and `onLearn(fact, ctx)`. `createPersona` accepts the same hooks as `commands`. Its default
+`onLearn` adds the fact to the persona, so `onPatch` fires and an app can save it.
 
 ## Exports
 

@@ -1,52 +1,52 @@
 import { createHmac } from "node:crypto";
 import type { IncomingMessage } from "@persona/core";
 import { describe, expect, it, vi } from "vitest";
-import { createCloudApiWebhook } from "../../src/cloud/webhook";
+import { createWhatsappWebhook } from "../src/webhook";
 
 const SECRET = "app-secret";
 const VERIFY = "verify-me";
 
 function setup() {
   const handled: IncomingMessage[] = [];
-  const webhook = createCloudApiWebhook({
+  const webhook = createWhatsappWebhook({
+    appSecret: SECRET,
     bot: {
-      handle: vi.fn(async (msg: IncomingMessage) => {
+      handle: vi.fn((msg: IncomingMessage) => {
         handled.push(msg);
-        return { kind: "replied" as const };
+        return Promise.resolve({ kind: "replied" as const });
       }),
     },
-    appSecret: SECRET,
-    verifyToken: VERIFY,
     phoneNumberId: "1001",
+    verifyToken: VERIFY,
   });
-  return { webhook, handled };
+  return { handled, webhook };
 }
 
 const payload = JSON.stringify({
-  object: "whatsapp_business_account",
   entry: [
     {
-      id: "waba",
       changes: [
         {
           field: "messages",
           value: {
-            messaging_product: "whatsapp",
-            metadata: { display_phone_number: "1", phone_number_id: "1001" },
             messages: [
               {
                 from: "5511",
                 id: "wamid.1",
+                text: { body: "hi" },
                 timestamp: "1",
                 type: "text",
-                text: { body: "hi" },
               },
             ],
+            messaging_product: "whatsapp",
+            metadata: { display_phone_number: "1", phone_number_id: "1001" },
           },
         },
       ],
+      id: "waba",
     },
   ],
+  object: "whatsapp_business_account",
 });
 
 const signed = (body: string) =>
@@ -57,8 +57,8 @@ describe("GET handshake", () => {
     const { webhook } = setup();
     const res = await webhook(
       new Request(
-        `https://x/webhook?hub.mode=subscribe&hub.verify_token=${VERIFY}&hub.challenge=123`,
-      ),
+        `https://x/webhook?hub.mode=subscribe&hub.verify_token=${VERIFY}&hub.challenge=123`
+      )
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("123");
@@ -67,8 +67,8 @@ describe("GET handshake", () => {
     const { webhook } = setup();
     const res = await webhook(
       new Request(
-        "https://x/webhook?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=123",
-      ),
+        "https://x/webhook?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=123"
+      )
     );
     expect(res.status).toBe(403);
   });
@@ -79,10 +79,10 @@ describe("POST messages", () => {
     const { webhook, handled } = setup();
     const res = await webhook(
       new Request("https://x/webhook", {
-        method: "POST",
-        headers: { "x-hub-signature-256": "sha256=00" },
         body: payload,
-      }),
+        headers: { "x-hub-signature-256": "sha256=00" },
+        method: "POST",
+      })
     );
     expect(res.status).toBe(403);
     expect(handled).toHaveLength(0);
@@ -91,10 +91,10 @@ describe("POST messages", () => {
     const { webhook, handled } = setup();
     const res = await webhook(
       new Request("https://x/webhook", {
-        method: "POST",
-        headers: { "x-hub-signature-256": signed(payload) },
         body: payload,
-      }),
+        headers: { "x-hub-signature-256": signed(payload) },
+        method: "POST",
+      })
     );
     expect(res.status).toBe(200);
     expect(handled.map((m) => m.text)).toEqual(["hi"]);
@@ -105,7 +105,8 @@ describe("POST messages", () => {
       release = r;
     });
     const handled: string[] = [];
-    const webhook = createCloudApiWebhook({
+    const webhook = createWhatsappWebhook({
+      appSecret: SECRET,
       bot: {
         handle: vi.fn(async (msg: IncomingMessage) => {
           await gate;
@@ -113,18 +114,17 @@ describe("POST messages", () => {
           return { kind: "replied" as const };
         }),
       },
-      appSecret: SECRET,
-      verifyToken: VERIFY,
       phoneNumberId: "1001",
+      verifyToken: VERIFY,
     });
     const background: Promise<unknown>[] = [];
     const res = await webhook(
       new Request("https://x/webhook", {
-        method: "POST",
-        headers: { "x-hub-signature-256": signed(payload) },
         body: payload,
+        headers: { "x-hub-signature-256": signed(payload) },
+        method: "POST",
       }),
-      { waitUntil: (p) => background.push(p) },
+      { waitUntil: (p) => background.push(p) }
     );
     expect(res.status).toBe(200);
     expect(handled).toHaveLength(0);
@@ -136,53 +136,53 @@ describe("POST messages", () => {
 
 describe("media", () => {
   const imagePayload = JSON.stringify({
-    object: "whatsapp_business_account",
     entry: [
       {
-        id: "waba",
         changes: [
           {
             field: "messages",
             value: {
-              messaging_product: "whatsapp",
-              metadata: { display_phone_number: "1", phone_number_id: "1001" },
               messages: [
                 {
                   from: "5511",
                   id: "wamid.img",
+                  image: { id: "img-1", mime_type: "image/jpeg" },
                   timestamp: "1",
                   type: "image",
-                  image: { id: "img-1", mime_type: "image/jpeg" },
                 },
               ],
+              messaging_product: "whatsapp",
+              metadata: { display_phone_number: "1", phone_number_id: "1001" },
             },
           },
         ],
+        id: "waba",
       },
     ],
+    object: "whatsapp_business_account",
   });
 
   it("downloads media and passes the bytes to the bot", async () => {
     const seen: IncomingMessage[] = [];
-    const webhook = createCloudApiWebhook({
+    const webhook = createWhatsappWebhook({
+      appSecret: SECRET,
       bot: {
-        handle: vi.fn(async (msg: IncomingMessage) => {
+        handle: vi.fn((msg: IncomingMessage) => {
           seen.push(msg);
-          return { kind: "replied" as const };
+          return Promise.resolve({ kind: "replied" as const });
         }),
       },
-      appSecret: SECRET,
-      verifyToken: VERIFY,
+      downloadMedia: (id) => Promise.resolve(new Uint8Array([id.length])),
       phoneNumberId: "1001",
-      downloadMedia: async (id) => new Uint8Array([id.length]),
+      verifyToken: VERIFY,
     });
     await webhook(
       new Request("https://x/webhook", {
-        method: "POST",
-        headers: { "x-hub-signature-256": signed(imagePayload) },
         body: imagePayload,
+        headers: { "x-hub-signature-256": signed(imagePayload) },
+        method: "POST",
       }),
-      { waitUntil: (p) => p },
+      { waitUntil: (p) => p }
     );
     expect(seen[0]?.media?.[0]).toMatchObject({
       kind: "image",
@@ -192,27 +192,25 @@ describe("media", () => {
 
   it("skips a media-only message whose download fails", async () => {
     const seen: IncomingMessage[] = [];
-    const webhook = createCloudApiWebhook({
+    const webhook = createWhatsappWebhook({
+      appSecret: SECRET,
       bot: {
-        handle: vi.fn(async (msg: IncomingMessage) => {
+        handle: vi.fn((msg: IncomingMessage) => {
           seen.push(msg);
-          return { kind: "replied" as const };
+          return Promise.resolve({ kind: "replied" as const });
         }),
       },
-      appSecret: SECRET,
-      verifyToken: VERIFY,
+      downloadMedia: () => Promise.reject(new Error("boom")),
       phoneNumberId: "1001",
-      downloadMedia: async () => {
-        throw new Error("boom");
-      },
+      verifyToken: VERIFY,
     });
     await webhook(
       new Request("https://x/webhook", {
-        method: "POST",
-        headers: { "x-hub-signature-256": signed(imagePayload) },
         body: imagePayload,
+        headers: { "x-hub-signature-256": signed(imagePayload) },
+        method: "POST",
       }),
-      { waitUntil: (p) => p },
+      { waitUntil: (p) => p }
     );
     expect(seen).toHaveLength(0);
   });

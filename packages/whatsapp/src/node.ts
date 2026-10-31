@@ -1,7 +1,7 @@
 import type { MessageHandler } from "@persona/core";
 import type { WASocket } from "baileys";
 import { attachBot } from "./attach";
-import { connectBaileys } from "./connect";
+import { connectWhatsappSocket } from "./connect";
 
 export interface RunOnNodeOpts {
   authDir?: string | undefined;
@@ -10,9 +10,9 @@ export interface RunOnNodeOpts {
 
 export async function runOnNode(
   bot: MessageHandler,
-  opts: RunOnNodeOpts = {},
+  opts: RunOnNodeOpts = {}
 ): Promise<void> {
-  const sock = await connectBaileys({
+  const sock = await connectWhatsappSocket({
     authDir: opts.authDir,
     onStatus: opts.onStatus,
     reconnect: true,
@@ -29,9 +29,9 @@ export async function runOnNode(
 
 export async function withSocket<T>(
   fn: (sock: WASocket) => Promise<T>,
-  opts: { authDir?: string } = {},
+  opts: { authDir?: string } = {}
 ): Promise<T> {
-  const sock = await connectBaileys({
+  const sock = await connectWhatsappSocket({
     authDir: opts.authDir,
     reconnect: false,
   });

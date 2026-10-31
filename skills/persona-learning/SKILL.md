@@ -35,7 +35,7 @@ const system = await LearningSystem.create({
 });
 
 const bot = createPersona({ persona, channel, generator, learning: system });
-await system.addRating("reply-id", chatId, +1);   // admin !good
+await system.addRating("", chatId, +1, "nice");   // admin !good (comment optional)
 ```
 
 `LearningSystem.create` loads the saved state, or defaults if it is missing or corrupt.
@@ -86,12 +86,15 @@ is the reply. Draining clears the pending outcomes.
 
 ## Gotchas
 
-- `distill` does not clear pending outcomes. Only `drainDataset` does. If nothing
-  drains the dataset, the pending list grows for as long as the process runs.
-  Drain it periodically or on a schedule.
-- `LearningSystem.recordOutcome` must never throw. The pipeline fires it and does not await.
-- Weights are not applied to the bot automatically. Call `setPromptWeights` and `setRecallWeights` from `onPatch` or after `addRating`.
-- Ratings from `!bad` and `!good` carry a comment, but `addRating` ignores it. It only changes counters.
+- `LearningSystem.create` restores the saved state into the engine. Pass `engineOptions` to tune
+  the engine. A pre-built `engine` must already hold the state you want, or it starts from defaults.
+- Pending outcomes are capped (`maxPending`, default 1000). The oldest are dropped if they are not
+  drained. The distillation cadence counts weight-moving outcomes separately, so the cap does not stop it.
+- Ratings keep the newest `maxRatings` (default 50) in `state.ratings`, with their comments.
+- The library does not push weights to a live bot. `examples/bot/src/learning.ts` does, after every
+  outcome and rating, and it saves the state every 10 outcomes and on every rating and distillation.
+  A crash can lose up to 9 outcome updates.
+- `recordOutcome` must not throw. The pipeline fires it and does not await it.
 
 ## Exports
 
@@ -112,5 +115,5 @@ is the reply. Draining clears the pending outcomes.
 
 - Wiring into the pipeline: [persona-sdk](../persona-sdk/SKILL.md)
 - Rating commands: [persona-policy](../persona-policy/SKILL.md)
-- Storing state in KV: [persona-kv](../persona-kv/SKILL.md)
+- Storing state in KV: `@persona/postgres`
 - Tests: `tests/integration/learning-loop.test.ts`, `tests/unit/pure-functions.test.ts`, `packages/learning/tests/`

@@ -6,11 +6,25 @@ import { allowedDependencies } from "../../scripts/packages";
 const root = join(import.meta.dirname, "../..");
 interface PackageManifest {
   name: string;
-  workspaces?: string[];
   scripts?: Record<string, string>;
+  workspaces?: string[];
 }
-const readJson = (p: string) =>
-  JSON.parse(readFileSync(p, "utf8")) as PackageManifest;
+function isPackageManifest(value: unknown): value is PackageManifest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "name" in value &&
+    typeof value.name === "string"
+  );
+}
+
+const readJson = (p: string): PackageManifest => {
+  const parsed: unknown = JSON.parse(readFileSync(p, "utf8"));
+  if (!isPackageManifest(parsed)) {
+    throw new Error(`${p} has no name`);
+  }
+  return parsed;
+};
 const dirsOf = (rel: string) =>
   readdirSync(join(root, rel), { withFileTypes: true })
     .filter((e) => e.isDirectory())
@@ -37,7 +51,7 @@ describe("workspace layout", () => {
 
   it("lists every SDK package in the dependency rules of scripts/packages.ts", () => {
     expect(Object.keys(allowedDependencies).sort()).toEqual(
-      sdkPackages.map((p) => p.pkg.name).sort(),
+      sdkPackages.map((p) => p.pkg.name).sort()
     );
   });
 
@@ -50,7 +64,7 @@ describe("workspace layout", () => {
       const testsDir = join(root, rel, "tests");
       expect(existsSync(testsDir), rel).toBe(true);
       const hasTests = readdirSync(testsDir, { recursive: true }).some((f) =>
-        String(f).endsWith(".test.ts"),
+        String(f).endsWith(".test.ts")
       );
       expect(hasTests, rel).toBe(true);
     }

@@ -1,3 +1,3 @@
 # Examples
 
-Only one example app: [`bot`](bot). It wires the SDK to OpenRouter and WhatsApp.
+Only one example app: [`bot`](bot). It runs a local model with ggml-node, learns a persona from WhatsApp exports, and ranks group memory.

@@ -29,7 +29,7 @@ const result = await bot.handle({ id: "msg-1", chatId: "chat-1", text: "hi Ana" 
 `channel` and `generator` are ports from `@persona/core`. Any transport or model
 adapter that matches the shape works. See [persona-whatsapp](../persona-whatsapp/SKILL.md)
 for transports and [persona-example-bot](../persona-example-bot/SKILL.md) for an
-OpenRouter generator.
+a model generator (the bot example passes a local ggml-node model).
 
 ## createPersona options
 
@@ -48,6 +48,7 @@ OpenRouter generator.
 | `guards` | `[noEcho]` plus yours | Each returns `true` to allow the reply. |
 | `prompt` | see below | Passed to `buildSystemPrompt`. |
 | `learning` | none | A `LearningObserver`. See [persona-learning](../persona-learning/SKILL.md). |
+| `commands` | none | Hooks for admin commands: `onRate`, `onWeights`, `onDataset`, `onDistill`, `onLearn`. `onLearn` defaults to adding the fact to the persona through `applyPatch`. |
 | `weights` | `{ maxWords: 15, exampleBoost: 1, styleGuideStrength: 1, extraRules: [] }` | Live prompt weights. |
 | `onPatch`, `setPromptWeights`, `setRecallWeights` | none | Callbacks fired when the bot changes its own settings. |
 
@@ -62,10 +63,8 @@ style guide, the language hint, `Reply in at most N words.`, the AI admission
 line, your extra rules, example quotes (up to 8, at most 80 characters each,
 system-looking lines dropped), real exchanges (up to 6), phrases and facts.
 
-- `maxWords` comes from `weights.maxWords`, not from `prompt.maxWords`. Known
-  issue: `createPersona` always passes its own weights, so `prompt.maxWords` is
-  silently ignored. Set `weights.maxWords` or call `setPromptWeights` instead.
-  The reproduction is `packages/persona/tests/known-issues.test.ts`.
+- `maxWords` comes from `weights.maxWords` when `weights` is given. Otherwise it is
+  `prompt.maxWords` (default 15). Runtime changes through `setPromptWeights` replace it.
 - `admitBeingABot: false` drops the AI admission line.
 - The prompt is a getter, so `applyPatch` and `setPromptWeights` take effect on
   the next message.
@@ -113,7 +112,6 @@ style guide. It then calls `onPatch`.
 ## Gotchas
 
 - `createPersona` mutates `persona` on `applyPatch`. Pass a copy if the original must stay unchanged.
-- `prompt.maxWords` is ignored (see above).
 - Default `recallLimit` is `0`. The example app sets it from `RECALL_LIMIT`, which defaults to `4`.
 
 ## Types
