@@ -17,11 +17,10 @@ export const setup = () => {
 
     if (existsSync(target)) {
       console.log(`- ${target} already exists, leaving it alone`);
-      continue;
+    } else {
+      copyFileSync(example, target);
+      console.log(`✓ Created ${target} from .env.example`);
     }
-
-    copyFileSync(example, target);
-    console.log(`✓ Created ${target} from .env.example`);
   }
 
   console.log(`

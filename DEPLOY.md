@@ -1,8 +1,7 @@
 # Deploying the linked-device bot (Baileys)
 
 `examples/bot/src/node.ts` is a long-running process that keeps a WhatsApp Web session
-open. It cannot run on Cloudflare Workers, so run it in a container on a host with a
-persistent disk. For the Workers deployment, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+open. Run it in the Docker container described in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), on a host with a persistent disk.
 
 Only ever run **one** instance per WhatsApp account. Two instances sharing the same
 `.auth/` directory will fight over the session.
@@ -10,14 +9,14 @@ Only ever run **one** instance per WhatsApp account. Two instances sharing the s
 Persistent state, relative to `examples/bot/` inside the container:
 
 - `.auth/` holds the WhatsApp session credentials. Treat it like a password.
-- `data/persona.json` is the persona file built by `bun run ingest`.
+- `data/persona.json` is the persona file. Write it by hand from `data/persona.example.json`.
 
 Both are mounted as volumes and never baked into the image.
 
 ## 1. Prerequisites
 
-- An OpenRouter API key. If the key was ever committed to git, rotate it first
-  (see [docs/OWNER_TODO.md](docs/OWNER_TODO.md)).
+- Enough disk and memory for the model: about 1 GB for `qwen2.5-0.5b` plus its cache.
+  The model runs in the bot's own process, so no model API key is needed.
 - A WhatsApp number for the bot. A dedicated number is safer.
 - A small Linux VPS (Ubuntu 24.04, 1 GB RAM is enough) with SSH access.
 
@@ -40,17 +39,15 @@ mkdir -p examples/bot/.auth examples/bot/data
 
 ## 4. Build the persona (run on your laptop)
 
-`data/` is gitignored, so build the persona locally and copy it over.
+`data/` is gitignored, so write the persona locally and copy it over.
 
 ```bash
 cd examples/bot
-bun run ingest path/to/export.txt --list                # find the sender's exact name
-bun run ingest path/to/export.txt --person "Name" --name "Display name"
+cp data/persona.example.json data/persona.json   # then edit it
 scp data/persona.json root@<VPS_IP>:/opt/persona/examples/bot/data/persona.json
 ```
 
-Re-running `ingest` keeps hand-written `styleGuide`, `phrases`, `facts` and `languageHint`.
-Edit those fields in `data/persona.json` and copy the file again after changing them.
+Edit the file and copy it again after each change.
 
 ## 5. Create the production env file
 
@@ -66,8 +63,7 @@ Fill it in. The variables are listed in
 ```env
 PERSONA_CONSENT=true
 PERSONA_NAME=<display name, as in persona.json>
-PERSONA_MODEL=<OpenRouter model id>
-OPENROUTER_API_KEY=<rotated key>
+PERSONA_MODEL=qwen2.5-0.5b
 
 ADMIN_NUMBERS=<digits with country code, comma-separated, e.g. 5511999999999>
 MAX_PER_10MIN=5
@@ -134,6 +130,34 @@ docker logs -f persona
 
 Look for `[whatsapp] open` and `is running (linked device)`. Then, in a direct chat with
 the bot, send a message; or in a group, send `!whois`. The bot should reply.
+
+## Database (Postgres with pgvector)
+
+History, dedupe, rate limits, pause state, learning and memory live in Postgres. Set this
+in `prod.env`:
+
+```
+DATABASE_URL=postgres://persona:<password>@<host>:5432/persona
+```
+
+Semantic recall uses the `bge-small-en-v1.5` embedding model, which runs inside the bot. It is
+downloaded on first start (about 37 MB) into the `ggml_cache` volume, so the download happens
+once per host. Nothing else needs to run.
+
+The bot creates its tables on start, so the database needs the `vector` extension available
+(`pgvector/pgvector:pg15`, or a managed Postgres that offers pgvector).
+
+Either point `DATABASE_URL` at a managed database, or run the stack from
+`docker/compose.yaml`, which starts Postgres next to the bot. Compose sets `DATABASE_URL` to
+the `postgres` service for you:
+
+```bash
+cd /opt/persona/docker && docker compose up -d --build
+docker compose logs -f persona-bot
+```
+
+With compose, the `.auth/` and `data/` volumes are the same as above, but the bot runs under
+compose instead of `docker run`. Use one or the other.
 
 ## Updating
 

@@ -14,8 +14,8 @@ app that uses them.
 | [`@persona/memory`](packages/memory) | History, memory nodes, search index, dedupe, rate limits. |
 | [`@persona/policy`](packages/policy) | When to answer, and admin commands. |
 | [`@persona/core`](packages/core) | Shared ports and types. |
-| [`@persona/whatsapp`](packages/whatsapp) | WhatsApp transports: Cloud API (`/cloud`) and linked device via Baileys (`/baileys`). |
-| [`@persona/kv`](packages/kv) | Key-value storage: history, dedupe, rate limits, pause state. |
+| [`@persona/whatsapp`](packages/whatsapp) | WhatsApp for bots: Cloud API webhook and linked device (Baileys), one API. |
+| [`@persona/postgres`](packages/postgres) | Postgres (pgvector) storage: key-value state (history, dedupe, rate limits, pause), memory nodes, graph edges. |
 
 ## Continuous learning
 
@@ -32,7 +32,7 @@ replies and run distillation:
 !distill      # run distillation now
 ```
 
-The learning state persists in KV (`LEARNING` binding on the Worker) or in
+The learning state persists in the Postgres `kv` table, or in
 `.auth/learning.json` on the linked device. Distillation produces a persona
 patch (facts, phrases, style-guide) that is applied immediately.
 
@@ -42,9 +42,8 @@ patch (facts, phrases, style-guide) that is applied immediately.
 bun install
 bun run test
 
-# 1. Learn a persona from an export (who has the most messages?)
-bun run --cwd examples/bot ingest path/to/export.txt --list
-bun run --cwd examples/bot ingest path/to/export.txt --person "Name"
+# 1. Create the persona file by hand, starting from the example
+cp examples/bot/data/persona.example.json examples/bot/data/persona.json
 
 # 2. Try it offline with a fake model
 bun run --cwd examples/bot simulate
@@ -53,17 +52,17 @@ bun run --cwd examples/bot simulate
 bun run --cwd examples/bot bot
 ```
 
-## Train the bot
+## The persona file
 
-```bash
-cd examples/bot
-bun run ingest export.txt --person "Name" --name "Display"      # quotes and example exchanges
-bun run ingest export.txt --person "Name" --fact "Works as a nurse"   # add facts, repeatable
-bun run ingest export.txt --person "Name" --facts facts.txt          # one fact per line
-```
+The bot reads `examples/bot/data/persona.json` (or `PERSONA_FILE`). There is no import
+tool. Copy `data/persona.example.json` and edit it: `name`, `styleGuide`, `quotes`,
+`phrases`, `facts` and optional `exchanges` (real `{ user, assistant }` pairs). Only use
+messages from someone who has consented. The format is in `skills/persona-schemas`.
 
-Hand-written `styleGuide`, `phrases` and `facts` survive re-runs. Set `EMBEDDING_MODEL` to
-enable semantic recall, and `RECALL_LIMIT` to control how much past context each prompt gets.
+Train the model with `bun run train` (see [examples/bot](examples/bot/README.md)). `RECALL_LIMIT` controls how much past context each prompt gets.
+
+When `LEARNING_ENABLED=true`, the bot adjusts its prompt from outcomes and admin ratings,
+and saves that state in Postgres. `!dataset` writes the entries to Postgres as well.
 
 ## Use the SDK in your own app
 

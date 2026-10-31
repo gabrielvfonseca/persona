@@ -1,94 +1,79 @@
-# Deployment reference
+# Deployment
 
-Two ways to run the bot. Both are built from `examples/bot`.
+The bot runs in a Docker container next to a Postgres database with pgvector. Both are
+defined in [`docker/compose.yaml`](../docker/compose.yaml), and the image is built from
+[`examples/bot/Dockerfile`](../examples/bot/Dockerfile). The container runs the linked device
+(`examples/bot/src/node.ts`): a WhatsApp Web session through Baileys, with a local model.
 
-| Transport | Runs on | Entry point | Runbook |
-|---|---|---|---|
-| Linked device (Baileys) | A VPS or any host with a persistent disk | `examples/bot/src/node.ts` | [DEPLOY.md](../DEPLOY.md) |
-| Cloud API (official webhook) | Cloudflare Workers | `examples/bot/src/worker.ts` | This page |
+Only one linked-device instance may run per WhatsApp account. For the step-by-step runbook
+see [DEPLOY.md](../DEPLOY.md).
 
-Only one linked-device instance may run per WhatsApp account.
+## Run it
+
+```bash
+cp examples/bot/.env.example examples/bot/.env   # fill in PERSONA_CONSENT, PERSONA_NAME, ...
+docker compose -f docker/compose.yaml up -d --build
+docker compose -f docker/compose.yaml logs -f persona-bot   # scan the QR code once
+```
+
+Postgres starts first and the bot waits for it to be healthy. The schema is applied on every
+start (`packages/postgres/migrations/001_initial.sql`), and the advisory lock makes that safe
+when several processes start at once.
+
+## Volumes
+
+| Path in the container | Holds | Survives |
+|---|---|---|
+| `/app/examples/bot/.auth` | WhatsApp session credentials | Restarts; losing it means re-linking |
+| `/app/examples/bot/data` | Persona file and training output | Restarts |
+| Postgres `postgres_data` | Chat history, memory, group records, learning, dataset exports | Restarts |
+
+Session credentials and the persona file stay out of the image. Mount them as volumes.
 
 ## Environment variables
 
-Every variable is validated by `examples/bot/src/config.ts`. A missing or invalid value
-stops startup and lists every problem at once.
-
-| Variable | Linked device | Cloud API | Description |
-|---|---|---|---|
-| `PERSONA_CONSENT` | Required | Required | Must be exactly `true` |
-| `PERSONA_NAME` | Required | Required | Display name; also matched when someone names the bot |
-| `PERSONA_MODEL` | Required | Required | OpenRouter model id for replies |
-| `OPENROUTER_API_KEY` | Required | Required | OpenRouter key |
-| `PERSONA_FILE` | Optional | Not used | Persona path (default `data/persona.json`) |
-| `ADMIN_NUMBERS` | Optional | Optional | Comma-separated numbers allowed to `!pause` and `!resume` |
-| `MAX_PER_10MIN` | Optional | Optional | Replies per chat per 10 minutes (default `5`) |
-| `STICKER_MODEL` | Optional | Optional | Vision model used to describe images and stickers |
-| `EMBEDDING_MODEL` | Optional | Optional | Embedding model for semantic recall. Unset means keyword recall only |
-| `RECALL_LIMIT` | Optional | Optional | Past messages and knowledge added to each prompt (default `4`, `0` turns it off) |
-| `AUTH_DIR` | Optional | Not used | WhatsApp session directory (default `.auth`) |
-| `WHATSAPP_ACCESS_TOKEN` | Not used | Required | Graph API access token |
-| `WHATSAPP_APP_SECRET` | Not used | Required | Used to verify webhook signatures |
-| `WHATSAPP_PHONE_NUMBER_ID` | Not used | Required | Phone number id the bot sends from |
-| `WHATSAPP_VERIFY_TOKEN` | Not used | Required | Token you enter in the Meta dashboard |
-| `ADMIN_KEY` | Not used | Required | Basic auth password for `/cf-bot/*` and `/admin/*` |
-
-### Continuous learning (optional, linked device and Cloud API)
+Every variable is validated by `examples/bot/src/config.ts`. A missing or invalid value stops
+startup and lists every problem at once.
 
 | Variable | Default | Description |
 |---|---|---|
+| `PERSONA_CONSENT` | Required | Must be exactly `true`; you have the subject's consent |
+| `PERSONA_NAME` | Required | Display name; also matched when someone names the bot |
+| `PERSONA_MODEL` | — | Registry id (`qwen2.5-0.5b`, `qwen2.5-1.5b`, `smollm2-360m`) or a `.gguf` path. Unset: the active fine-tuned model, else `qwen2.5-0.5b` |
+| `MODEL_CONTEXT` | `4096` | Context window for the local model, in tokens (512–32768) |
+| `MEMORY_MAX_NODES` | `50000` | Most memory nodes kept searchable; oldest are evicted |
+| `API_PORT` | — | Serve the ingest API on this port. Unset: no API |
+| `API_KEY` | — | Bearer token for the ingest API. Required when `API_PORT` is set; 16+ characters |
+| `PERSONA_FILE` | `data/persona.json` | Persona JSON file |
+| `ADMIN_NUMBERS` | — | Comma-separated phone numbers allowed to run `!pause`, `!resume` and the other admin commands |
+| `MAX_PER_10MIN` | `5` | Replies per chat per 10 minutes (1–100) |
+| `RECALL_LIMIT` | `4` | Past messages added to each prompt. `0` turns recall off |
+| `DATABASE_URL` | Required | Postgres connection string (pgvector). Holds history, dedupe, rate limits, pause state, learning and memory |
+| `EMBEDDING_MODEL` | `bge-small-en-v1.5` | ggml-node embedding model, run in-process. Downloaded on first use (about 37 MB) and cached. Must produce 384-dimension vectors |
+| `AUTH_DIR` | `.auth` | WhatsApp session credentials. Keep on a volume, out of git |
 | `LEARNING_ENABLED` | off | Set to `true` to turn on continuous learning |
 | `LEARNING_WARMUP` | `5` | Outcomes and ratings before weights start to move |
 | `LEARNING_STEP` | `0.5` | Step size for weight nudges |
 | `LEARNING_DISTILL_EVERY` | `20` | Run distillation every N outcomes |
 | `LEARNING_MAX_PATCH` | `5` | Maximum facts and phrases per patch |
 
-## Cloud API on Cloudflare Workers
+## Embeddings and TTL
 
-Deploy from `examples/bot`:
-
-```bash
-cd examples/bot
-wrangler secret put OPENROUTER_API_KEY
-wrangler secret put PERSONA_JSON < data/persona.json
-# ...and the other secrets listed above
-wrangler deploy
-```
-
-`PERSONA_JSON` holds the whole persona file, so the bundle needs no data file. The Worker
-fails with a clear message if it is missing.
-
-Configuration lives in `examples/bot/wrangler.toml`:
-
-```toml
-name = "persona-bot"
-main = "src/worker.ts"
-compatibility_date = "2026-10-29"
-compatibility_flags = ["nodejs_compat"]
-
-[[kv_namespaces]]
-binding = "CONVERSATIONS"          # chat history and dedupe, shared across isolates
-id = "<your-kv-namespace-id>"
-
-[[durable_objects.bindings]]
-name = "WHATSAPP"
-class_name = "WhatsAppConnection"  # the /cf-bot/* admin proxy target
-```
-
-Routes:
-
-- `GET` and `POST /webhook/whatsapp`: the Cloud API webhook.
-- `ANY /cf-bot/*`: Basic auth with `ADMIN_KEY`, then proxied to the `WhatsAppConnection` Durable Object.
-- `GET /admin/persona`: Basic auth with `ADMIN_KEY`, returns the persona name.
-
-The Durable Object currently answers only `/status`. Linked-device sessions on Workers are
-not running yet; see [OWNER_TODO.md](OWNER_TODO.md).
-
-Do not add `[vars]` to `wrangler.toml`; it would overwrite values set in the dashboard.
+- **Embedding model:** memory is embedded in-process with `bge-small-en-v1.5` (384 dimensions,
+  MIT). The model id is recorded in `kv`. When it changes, or when nodes exist from before it
+  was recorded, the container re-embeds every node at startup and logs its progress. Measured on an Apple-silicon Mac: about 80 nodes per second, so 10,000 nodes take about 2 minutes and 50,000 about 11. The container runs on CPU and may be slower. Vectors
+  from different models are not comparable, so there is no mixing.
+- **Embedding width:** the column is `vector(384)`. Postgres rejects vectors of any other width,
+  so an embedding model of another size needs a migration first.
+- **Expiry:** rate-limit windows and dedupe keys carry a TTL. Reads ignore expired rows. The
+  container also deletes them every 10 minutes, so the table does not grow without bound.
 
 ## Local checks
 
 ```bash
 bun run --cwd examples/bot simulate   # offline run with a fake model
-bunx wrangler deploy --dry-run        # from examples/bot: bundles the Worker
+bun run --cwd examples/bot typecheck
 ```
+
+`simulate` needs no Postgres. Other commands (`api`, `groups`) read the same environment, so
+they need `DATABASE_URL` set.

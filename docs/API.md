@@ -74,6 +74,17 @@ createCommands(opts: { adminNumbers: string[]; botName: string; state: BotState 
 Commands: `!whois` (anyone), `!pause` and `!resume` (admins). Non-admins who send an
 admin command get the normal reply path, as if they had sent plain text.
 
+## LearningSystem
+
+```ts
+LearningSystem.create(opts: { store: LearningStore; engineOptions?: EngineOptions; onPatch?: (p: PersonaPatch) => void; onDataset?: (entries: DatasetEntry[]) => void }): Promise<LearningSystem>
+```
+
+Loads the saved state from `store` (`get`/`set` of JSON strings, key `learning:state`) and builds the engine
+from it. `engineOptions` tunes it: `warmup`, `step`, `distillEvery`, `maxPatchSize`, `maxPending` (1000),
+`maxRatings` (50). Use `recordOutcome` as the pipeline observer and `addRating`, `distill`,
+`drainDataset` and `persist` from the admin hooks.
+
 ## createMemory
 
 ```ts
@@ -123,32 +134,35 @@ buildSystemPrompt(persona: Persona, opts?: PromptOptions): string
 | `extraRules` | `[]` | Extra lines added to the prompt |
 | `platform` | none | Accepted, not used yet |
 
-## trainFromExport
+## WhatsappClient
 
 ```ts
-trainFromExport(raw: string, opts: { sender: string; name?: string; maxQuotes?: number; maxQuoteChars?: number }): Persona
-```
-
-Parses a WhatsApp export and builds a persona for one sender. Throws `Unknown sender` if the
-name does not appear in the export.
-
-## CloudApiClient
-
-```ts
-new CloudApiClient({ phoneNumberId: string; accessToken: string; graphVersion?: string; fetch?: typeof fetch })
+new WhatsappClient({ phoneNumberId: string; accessToken: string; graphVersion?: string; fetch?: typeof fetch })
 ```
 
 Implements `Channel`. Methods: `send(chatId, text, replyTo?)`, `markRead(chatId)`,
 `downloadMedia(id, maxBytes)`.
 
-## createCloudApiWebhook
+## createWhatsappWebhook
 
 ```ts
-createCloudApiWebhook(opts: { bot: MessageHandler; appSecret: string; verifyToken: string; phoneNumberId: string; downloadMedia?: (id: string, maxBytes: number) => Promise<Uint8Array> }): (req: Request, ctx?: ExecutionContextLike) => Promise<Response>
+createWhatsappWebhook(opts: { bot: MessageHandler; appSecret: string; verifyToken: string; phoneNumberId: string; downloadMedia?: (id: string, maxBytes: number) => Promise<Uint8Array> }): (req: Request, ctx?: ExecutionContextLike) => Promise<Response>
 ```
 
 `GET` answers the verify handshake. `POST` checks the signature (403 on failure), then
 passes messages to `bot.handle`.
+
+## Linked device (Baileys)
+
+```ts
+connectWhatsappSocket(opts: { authDir?: string; reconnect?: boolean; onStatus?: (s: string) => void; onSocket?: (sock: WASocket) => void; version?: WAVersion; logger?: Logger }): Promise<WASocket>
+new WhatsappSocketChannel(sock: WASocket, name = "whatsapp")
+attachBot(sock: WASocket, bot: MessageHandler, opts?: { includeImages?: boolean }): void
+```
+
+`connectWhatsappSocket` saves credentials to `authDir` (default `.auth`) and reconnects after a
+close unless `reconnect` is `false`. `WhatsappSocketChannel` sends one message at a time, with
+typing indicators and a 2 to 8 second gap between messages.
 
 ## basicAuth
 

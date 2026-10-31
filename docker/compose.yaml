@@ -1,12 +1,41 @@
-# Docker Compose for local development (linked-device bot)
+# Docker Compose for the linked-device bot.
+# Copy examples/bot/.env.example to examples/bot/.env first and set DATABASE_URL there.
+# DATABASE_URL points at Supabase by default. To run the bot against a local
+# Postgres instead, start the `local-db` profile and set DATABASE_URL to
+# postgres://persona:persona@postgres:5432/persona in .env.
+# The project name keeps this stack's volumes apart from other compose projects on the same engine.
+name: persona
+
 services:
+  postgres:
+    profiles: [ "local-db" ]
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: persona
+      POSTGRES_USER: persona
+      POSTGRES_PASSWORD: persona
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U persona -d persona" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   persona-bot:
     build:
       context: ..
-      dockerfile: examples/persona/Dockerfile
+      dockerfile: examples/bot/Dockerfile
     env_file:
-      - ../examples/persona/.env
+      - ../examples/bot/.env
     volumes:
-      - ../examples/persona/data:/app/examples/persona/data
-      - ../examples/persona/.auth:/app/examples/persona/.auth
+      - ../examples/bot/.auth:/app/examples/bot/.auth
+      - ../examples/bot/data:/app/examples/bot/data
+      # Downloaded models (embedding and chat), so they are fetched once, not on every container start.
+      - ggml_cache:/home/bun/.cache/ggml-node
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+  ggml_cache:

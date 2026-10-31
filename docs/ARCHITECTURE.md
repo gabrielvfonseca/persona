@@ -6,7 +6,7 @@ puts them together. Transports and model providers plug in through ports defined
 
 ```
             ┌────────────── examples/bot (example) ──────────────┐
-            │ config · model (OpenRouter) · node.ts · worker.ts      │
+            │ config · local model (ggml-node) · node.ts (container)      │
             └───────────────────────┬────────────────────────────┘
                                      │ createPersona()
 ┌───────────────────────────────────▼────────────────────────────┐
@@ -17,7 +17,7 @@ puts them together. Transports and model providers plug in through ports defined
                         ┌───────────▼───────────┐
                         │ @persona/core         │
                         └───────────▲───────────┘
-          @persona/whatsapp (cloud, baileys)   @persona/kv
+          @persona/whatsapp (Cloud API + Baileys)   @persona/postgres
 ```
 
 ## The Pipeline
@@ -66,8 +66,8 @@ lines. Admins can rate replies with `!good`/`!bad` and run `!distill`.
 | `memory` | `core` |
 | `learning` | `core`, `schemas` |
 | `persona` | `core`, `schemas`, `policy`, `memory` |
-| `whatsapp` | `core`, zod, `@openchannelprotocol/sdk`, `baileys` (`/baileys` only) |
+| `whatsapp` | `core`, zod, `@openchannelprotocol/sdk`, `baileys` |
 | `kv` | `core` |
 | `examples/*` | anything, including model providers and Hono |
 
-Only `examples/*` may import a model provider (`ai`, `@openrouter/ai-sdk-provider`) or Hono.
+Only `examples/*` may import a model runtime (`ggml-node`, which is Node-only) or Hono.

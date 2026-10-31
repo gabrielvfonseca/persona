@@ -11,8 +11,8 @@ depends only on the packages below it in this table.
 | `@persona/memory` | Chat history, memory nodes, search index, dedupe, rate limits. | core |
 | `@persona/learning` | Continuous learning: outcomes, feedback, weight tuning, persona patches, fine-tune dataset. | core, schemas |
 | `@persona/persona` | **Main SDK.** Builds a bot from a persona, a model and a channel. | core, schemas, policy, memory |
-| `@persona/whatsapp` | WhatsApp transports: Cloud API (`/cloud`) and linked device (`/baileys`). | core, zod, @openchannelprotocol/sdk, baileys |
-| `@persona/kv` | Key-value storage: history, dedupe, rate limits, pause state. | core |
+| `@persona/whatsapp` | WhatsApp for bots: Cloud API webhook and linked device (Baileys), one API. | core, zod, @openchannelprotocol/sdk, baileys |
+| `@persona/postgres` | Postgres (pgvector) storage: key-value state (history, dedupe, rate limits, pause), memory nodes with keyword, semantic and graph search. | core |
 
 Example app: `examples/bot`. It is the only place that picks a model provider.
 
@@ -84,7 +84,7 @@ The engine tunes `PromptWeights` (maxWords, exampleBoost, styleGuideStrength, ex
 | `MemoryHistoryStore` | A `HistoryStore`. Returns the last `maxTurns` (default 20); older turns stay searchable. |
 | `MemoryDedupeStore`, `FixedWindowRateLimiter`, `MemoryBotState` | In-memory stores. The limiter keeps one window per key. |
 
-Memory is in-process. Persist it by passing your own `HistoryStore` (see `examples/bot/src/worker.ts`, which uses KV).
+Memory is in-process. The example app persists it in Postgres (`@persona/postgres`) by passing its own `HistoryStore`.
 
 ## @persona/policy
 
@@ -92,16 +92,8 @@ Memory is in-process. Persist it by passing your own `HistoryStore` (see `exampl
 |---|---|
 | `createReplyPolicy(opts)` | Decides `always` or `never` per message. Names are matched on word boundaries. |
 | `mentionsName(text, name)` | The name matcher on its own. |
-| `createCommands(opts)` | `!whois` (anyone), `!pause`, `!resume`, `!good`, `!bad`, `!weights`, `!dataset`, `!learn`, `!distill` (admins). Pass `onRate`, `onWeights`, `onDataset`, `onDistill` to wire the learning engine. |
+| `createCommands(opts)` | `!whois` (anyone), `!pause`, `!resume`, `!good`, `!bad`, `!weights`, `!dataset`, `!learn`, `!distill` (admins). Pass `onRate`, `onWeights`, `onDataset`, `onDistill`, `onLearn` (or `commands` on `createPersona`) to wire learning and `!learn`. |
 
-
-| Export | Purpose |
-|---|---|
-| `trainFromExport(raw, { sender, name? })` | Export text → `Persona` with quotes and example `exchanges`. Hand-written fields start empty. |
-| `buildExchanges(messages, target)` | Pairs what others said with the target's replies, within one conversation window. |
-| `listSenders(messages)` | Senders ordered by message count. |
-| `parseExport(raw)`, `segment(messages)` | iOS and Android exports, with 30-minute conversation windows. |
-| `parseExportDate(ts, "dmy" \| "mdy")` | Explicit date parsing. Export dates are never passed to `new Date()`. |
 
 ## @persona/schemas
 
@@ -118,24 +110,28 @@ Types only: `IncomingMessage`, `Channel`, `HistoryStore`, `DedupeStore`, `RateLi
 
 ## @persona/whatsapp
 
-Two entry points, so each bundle includes only what it uses.
+One package, one entry point (`import ... from "@persona/whatsapp"`). Both transports
+produce the same `IncomingMessage` and implement `Channel`.
 
-### `@persona/whatsapp/cloud` (Workers)
+| Export | Transport | Purpose |
+|---|---|---|
+| `createWhatsappWebhook(opts)` | Cloud API | Webhook handler. `GET` for the verify handshake, `POST` for messages. Takes an optional background context (a Workers `ExecutionContext` fits) as its second argument. |
+| `WhatsappClient` | Cloud API | Sends messages and downloads media through the Graph API. Implements `Channel`. |
+| `WhatsappError` | Cloud API | Error thrown on a failed Graph API call. |
+| `connectWhatsappSocket(opts)` | Linked device | Opens a Baileys socket. Prints a QR code on first login. |
+| `WhatsappSocketChannel` | Linked device | Serialized sends with typing indicators. Implements `Channel`. |
+| `attachBot(sock, bot, opts)` | Linked device | Routes incoming messages to a `MessageHandler`. |
+| `toIncoming(sock, msg, opts)` | Linked device | Async. Turns a Baileys message into an `IncomingMessage`, downloading images and stickers. |
+| `runOnNode(bot, opts)`, `withSocket(fn, opts)` | Linked device | Run a long-lived bot, or a short script with a socket. |
+| `listGroups(sock)` | Linked device | Lists the groups the linked device is in. |
+| `useKeyValueAuthState(storage, prefix)` | Linked device | Keeps Baileys auth in any key-value store. |
 
-| Export | Purpose |
-|---|---|
-| `createCloudApiWebhook(opts)` | Webhook handler. `GET` for the verify handshake, `POST` for messages. Accepts the Workers `ExecutionContext` as its second argument. |
-| `CloudApiClient` | Sends messages and downloads media through the Graph API. Implements `Channel`. |
-| `ExecutionContextLike` | The `waitUntil` shape the webhook needs. |
+Linked-device code runs on Node, inside the container.
 
-### `@persona/whatsapp/baileys` (Node)
+## @persona/postgres
 
-`BaileysChannel`, `connectBaileys`, `attachBot`, `listGroups`, `useKeyValueAuthState`,
-`toIncoming` (async: downloads images and stickers). `runOnNode` and `withSocket` live at
-`@persona/whatsapp/baileys/node`. `ws-shim` at `@persona/whatsapp/baileys/ws-shim` is the
-Workers WebSocket shim.
-
-## @persona/kv
-
-`kvHistoryStore`, `kvDedupeStore`, `loadKvBotState` (pause state), `kvRateLimiter`.
-`basicAuth` lives in `examples/bot`, not in a package.
+`kvHistoryStore`, `kvDedupeStore`, `loadKvBotState` (pause state) and `kvRateLimiter` work on any `KVStorage`. `PgKVStorage` implements `KVStorage` on the `kv` table (TTLs enforced on read, expired rows swept).
+`PgNodeStore` keeps memory nodes in `pg_nodes`: full-text keyword search, pgvector cosine search, and
+graph edges in `pg_edges` walked with a recursive CTE (`traverse`). `migrate(pool)` applies the schema
+(`migrations/001_initial.sql`) and is safe to run on every start. The example app builds its Postgres
+memory in `examples/bot/src/memory/pg-memory.ts`.

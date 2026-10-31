@@ -15,21 +15,18 @@ Commands:
 const { positionals } = parseArgs({ allowPositionals: true, strict: false });
 const [command = "help"] = positionals;
 
-switch (command) {
-  case "setup":
-    setup();
-    break;
-  case "packages":
-    listPackages();
-    break;
-  case "check-deps":
-    checkDeps();
-    break;
-  case "help":
-    console.log(usage);
-    break;
-  default:
-    console.error(`Unknown command: ${command}\n`);
-    console.error(usage);
-    process.exitCode = 1;
+const commands = new Map<string, () => void>([
+  ["setup", setup],
+  ["packages", listPackages],
+  ["check-deps", checkDeps],
+  ["help", () => console.log(usage)],
+]);
+
+const run = commands.get(command);
+if (run) {
+  run();
+} else {
+  console.error(`Unknown command: ${command}\n`);
+  console.error(usage);
+  process.exitCode = 1;
 }
