@@ -33,4 +33,4 @@ is not bundled into it.
 - `BaileysChannel`: serialized sends with typing indicators.
 - `useKeyValueAuthState`, `listGroups`, `runOnNode`, `withSocket`.
 
-See `examples/persona/src/node.ts` for the wiring.
+See `examples/bot/src/node.ts` for the wiring.

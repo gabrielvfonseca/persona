@@ -1,6 +1,9 @@
 import type { BotState } from "@persona/core";
 
-export type CommandHandler = (args: string[]) => Promise<string | undefined>;
+export type CommandHandler = (
+  args: string[],
+  ctx: { chatId?: string | undefined },
+) => Promise<string | undefined>;
 
 export interface Command {
   name: string;
@@ -62,7 +65,7 @@ export function createCommands(opts: CommandsOptions) {
     admin: true,
     handler: async (_args, ctx) => {
       if (!opts.onRate) return "Learning is not enabled.";
-      await opts.onRate(ctx?.chatId ?? "unknown", 1);
+      await opts.onRate(ctx?.chatId ?? "unknown", 1, undefined);
       return "Marked good.";
     },
   };
@@ -71,9 +74,9 @@ export function createCommands(opts: CommandsOptions) {
     name: "!bad",
     description: "Rate the last reply as bad (admins only).",
     admin: true,
-    handler: async (_args, ctx) => {
+    handler: async (args, ctx) => {
       if (!opts.onRate) return "Learning is not enabled.";
-      const comment = _args.join(" ").trim() || undefined;
+      const comment = args.join(" ").trim() || undefined;
       await opts.onRate(ctx?.chatId ?? "unknown", -1, comment);
       return comment ? `Marked bad: ${comment}` : "Marked bad.";
     },
@@ -111,7 +114,17 @@ export function createCommands(opts: CommandsOptions) {
     handler: async () => opts.onDistill?.() ?? "Learning is not enabled.",
   };
 
-  const commands: Command[] = [whois, pause, resume, good, bad, weights, dataset, learn, distill];
+  const commands: Command[] = [
+    whois,
+    pause,
+    resume,
+    good,
+    bad,
+    weights,
+    dataset,
+    learn,
+    distill,
+  ];
 
   function isAdmin(participant: string): boolean {
     const at = participant.split("@")[0];
@@ -129,7 +142,9 @@ export function createCommands(opts: CommandsOptions) {
     ctx?: { chatId?: string | undefined },
   ): Promise<{ handled: boolean; reply?: string | undefined }> {
     const trimmed = text.trim();
-    const cmd = commands.find((c) => trimmed === c.name || trimmed.startsWith(c.name + " "));
+    const cmd = commands.find(
+      (c) => trimmed === c.name || trimmed.startsWith(`${c.name} `),
+    );
     if (!cmd) return { handled: false };
 
     if (cmd.admin && !isAdmin(participant)) {
@@ -137,11 +152,8 @@ export function createCommands(opts: CommandsOptions) {
     }
 
     const rest = trimmed.slice(cmd.name.length);
-    const args = rest
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
-    const reply = await cmd.handler(args, ctx);
+    const args = rest.trim().split(/\s+/).filter(Boolean);
+    const reply = await cmd.handler(args, ctx ?? {});
     return { handled: true, reply };
   }
 

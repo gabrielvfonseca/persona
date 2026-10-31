@@ -51,13 +51,17 @@ export interface PersonaOptions {
   /** Update the prompt weights at runtime. */
   setPromptWeights?: ((w: PromptWeights) => void) | undefined;
   /** Update the recall weights at runtime. */
-  setRecallWeights?: (
-    w: { keywordWeight: number; semanticWeight: number; rrfK: number },
-  ) => void | undefined;
+  setRecallWeights?:
+    | ((w: {
+        keywordWeight: number;
+        semanticWeight: number;
+        rrfK: number;
+      }) => undefined)
+    | undefined;
 }
 
 export interface ConfiguredPersona extends PersonaBot {
-  systemPrompt: string;
+  get systemPrompt(): string;
   memory: Memory;
   /** Apply a persona patch and rebuild the system prompt. */
   applyPatch(patch: PersonaPatch): void;
@@ -90,7 +94,10 @@ export function createPersona(opts: PersonaOptions): ConfiguredPersona {
     styleGuideStrength: 1,
     extraRules: [],
   };
-  let systemPrompt = buildSystemPrompt(persona, { ...opts.prompt, weights });
+  // Mutable prompt holder so the pipeline reads the latest prompt on every call.
+  const promptHolder = {
+    current: buildSystemPrompt(persona, { ...opts.prompt, weights }),
+  };
   const recallLimit = opts.recallLimit ?? 0;
 
   const bot = createPersonaBot({
@@ -113,7 +120,7 @@ export function createPersona(opts: PersonaOptions): ConfiguredPersona {
       botName: persona.name,
       state: memory.state,
     }),
-    systemPrompt,
+    systemPrompt: () => promptHolder.current,
     transforms: opts.transforms ?? [stripSpeakerPrefix, firstSentence],
     guards: [noEcho, ...(opts.guards ?? [])],
     examples: persona.quotes,
@@ -127,22 +134,27 @@ export function createPersona(opts: PersonaOptions): ConfiguredPersona {
 
   const applyPatch = (patch: PersonaPatch) => {
     if (patch.facts) persona.facts = unique([...persona.facts, ...patch.facts]);
-    if (patch.phrases) persona.phrases = unique([...persona.phrases, ...patch.phrases]);
+    if (patch.phrases)
+      persona.phrases = unique([...persona.phrases, ...patch.phrases]);
     if (patch.styleGuide) {
       persona.styleGuide = [persona.styleGuide, patch.styleGuide]
         .filter(Boolean)
         .join("\n\n");
     }
-    systemPrompt = buildSystemPrompt(persona, { ...opts.prompt, weights });
-    bot.systemPrompt = systemPrompt;
+    promptHolder.current = buildSystemPrompt(persona, {
+      ...opts.prompt,
+      weights,
+    });
     opts.onPatch?.(patch);
   };
 
   const setPromptWeights = (w: PromptWeights) => {
     weights = w;
     opts.setPromptWeights?.(w);
-    systemPrompt = buildSystemPrompt(persona, { ...opts.prompt, weights });
-    bot.systemPrompt = systemPrompt;
+    promptHolder.current = buildSystemPrompt(persona, {
+      ...opts.prompt,
+      weights,
+    });
   };
 
   const setRecallWeights = (w: {
@@ -156,7 +168,9 @@ export function createPersona(opts: PersonaOptions): ConfiguredPersona {
 
   return {
     ...bot,
-    systemPrompt,
+    get systemPrompt() {
+      return promptHolder.current;
+    },
     memory,
     applyPatch,
     setPromptWeights,

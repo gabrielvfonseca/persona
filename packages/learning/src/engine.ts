@@ -3,33 +3,17 @@ import type {
   IncomingMessage,
   LearningState,
   PersonaPatch,
-  PromptWeights,
-  RecallWeights,
-  Turn,
 } from "@persona/core";
 import type { Outcome } from "./extract";
 import { outcomeSignal, wasReplied } from "./extract";
 
 export interface EngineOptions {
-  /** Minimum signal count before weights start moving. */
-  warmup?: number | undefined;
-  /** Step size for weight nudges. */
-  step?: number | undefined;
-  /** How often to run distillation (every N outcomes). */
-  distillEvery?: number | undefined;
-  /** Max facts/phrases to keep in a patch. */
-  maxPatchSize?: number | undefined;
-  /** Random source, for tests. */
-  random?: () => number | undefined;
+  warmup?: number;
+  step?: number;
+  distillEvery?: number;
+  maxPatchSize?: number;
+  random?: () => number;
 }
-
-const DEFAULTS: Required<EngineOptions> = {
-  warmup: 5,
-  step: 0.5,
-  distillEvery: 20,
-  maxPatchSize: 5,
-  random: Math.random,
-};
 
 /** One distilled persona patch, ready to apply. */
 export interface DistillResult {
@@ -44,12 +28,24 @@ export interface DistillResult {
  */
 export class LearningEngine {
   private state: LearningState;
-  private readonly opts: Required<EngineOptions>;
+  private readonly opts: {
+    warmup: number;
+    step: number;
+    distillEvery: number;
+    maxPatchSize: number;
+    random: () => number;
+  };
   private pending: Outcome[] = [];
 
   constructor(state: LearningState, opts: EngineOptions = {}) {
     this.state = state;
-    this.opts = { ...DEFAULTS, ...opts };
+    this.opts = {
+      distillEvery: opts.distillEvery ?? 20,
+      maxPatchSize: opts.maxPatchSize ?? 5,
+      random: opts.random ?? Math.random,
+      step: opts.step ?? 0.5,
+      warmup: opts.warmup ?? 5,
+    };
   }
 
   getState(): LearningState {
@@ -109,14 +105,7 @@ export class LearningEngine {
     if (samples < this.opts.warmup) return;
 
     const direction = signal;
-    // Prompt weights move against the signal: good replies -> allow longer,
-    // more examples; bad replies -> tighten.
-    s.prompt.maxWords = clamp(
-      s.prompt.maxWords + direction * step,
-      1,
-      40,
-      1,
-    );
+    s.prompt.maxWords = clamp(s.prompt.maxWords + direction * step, 1, 40, 1);
     s.prompt.exampleBoost = clamp(
       s.prompt.exampleBoost + direction * step * 0.5,
       0.5,
@@ -130,8 +119,6 @@ export class LearningEngine {
       0.5,
     );
 
-    // Recall weights: good outcomes boost semantic search, bad outcomes lean
-    // on keywords (which are more predictable).
     s.recall.semanticWeight = clamp(
       s.recall.semanticWeight + direction * step,
       0.1,
@@ -152,7 +139,6 @@ export class LearningEngine {
     const phrases: string[] = [];
     const max = this.opts.maxPatchSize;
 
-    // Pull the most recent good replies as candidate facts and phrases.
     const good = this.pending
       .filter((o) => wasReplied(o) && o.replyText)
       .slice(-max);
@@ -169,7 +155,6 @@ export class LearningEngine {
     patch.facts = facts.slice(0, max);
     patch.phrases = phrases.slice(0, max);
 
-    // Style guide: when bad outcomes dominate, tighten the style guide.
     const total = this.state.goodCount + this.state.badCount;
     if (total > 0 && this.state.badCount / total > 0.5) {
       patch.styleGuide =

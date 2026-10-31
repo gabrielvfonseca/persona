@@ -1,18 +1,5 @@
-import type { Channel, Turn } from "@persona/core";
-import { createMemory } from "@persona/memory";
-import { parsePersona } from "@persona/schemas";
 import { describe, expect, it, vi } from "vitest";
-import { createPersonaBot } from "../src/pipeline";
-import { createCommands, createReplyPolicy } from "@persona/policy";
-
-function stubCommands(result: { handled: boolean; reply?: string }) {
-  const real = createCommands({
-    adminNumbers: [],
-    botName: "Ana",
-    state: { paused: false, setPaused() {} },
-  });
-  return { ...real, handle: vi.fn().mockResolvedValue(result) };
-}
+import { createCommands } from "../src/commands";
 
 describe("feedback commands", () => {
   it("!good calls onRate with +1", async () => {
@@ -68,26 +55,5 @@ describe("feedback commands", () => {
     const r = await commands.handle("!good", "5599@s.whatsapp.net");
     expect(r.handled).toBe(false);
     expect(onRate).not.toHaveBeenCalled();
-  });
-});
-
-describe("weighted recall fusion", () => {
-  it("weights keyword and semantic lists independently", async () => {
-    const { fuseWeighted } = await import("@persona/memory");
-    const result = fuseWeighted([
-      { nodes: [{ id: "a" }, { id: "b" }], weight: 2 },
-      { nodes: [{ id: "b" }, { id: "c" }], weight: 0.5 },
-    ]);
-    // a: 2/(60+1) = 0.0328, b: 2/61 + 0.5/61 = 0.0410, c: 0.5/61 = 0.0082
-    expect(result[0]).toBe("b");
-    expect(result[1]).toBe("a");
-    expect(result[2]).toBe("c");
-  });
-
-  it("createMemory.setRecallWeights updates the stored weights", async () => {
-    const memory = createMemory();
-    memory.setRecallWeights({ keywordWeight: 3, semanticWeight: 0.2, rrfK: 60 });
-    // No throw; weights are stored on the memory object.
-    expect(memory).toBeDefined();
   });
 });

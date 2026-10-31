@@ -8,10 +8,9 @@ import type {
   Turn,
 } from "@persona/core";
 import { LearningEngine } from "./engine";
-import { loadLearningState, saveLearningState } from "./store";
-import type { LearningStore } from "./store";
-import { outcomeSignal, wasReplied } from "./extract";
 import type { Outcome } from "./extract";
+import type { LearningStore } from "./store";
+import { loadLearningState, saveLearningState } from "./store";
 
 export interface LearningSystemOptions {
   store: LearningStore;
@@ -27,30 +26,25 @@ export interface LearningSystemOptions {
 export class LearningSystem implements LearningObserver {
   readonly engine: LearningEngine;
   private readonly store: LearningStore;
-  private readonly onPatch?: (patch: PersonaPatch) => void | Promise<void>;
-  private readonly onDataset?: (entries: DatasetEntry[]) => void | Promise<void>;
-  private state: LearningState;
-  private initialized = false;
+  private readonly onPatch: (patch: PersonaPatch) => void | Promise<void>;
+  private readonly onDataset: (entries: DatasetEntry[]) => void | Promise<void>;
 
   private constructor(
     engine: LearningEngine,
-    state: LearningState,
+    _state: LearningState,
     store: LearningStore,
     opts: LearningSystemOptions,
   ) {
     this.engine = engine;
-    this.state = state;
     this.store = store;
-    this.onPatch = opts.onPatch;
-    this.onDataset = opts.onDataset;
+    this.onPatch = opts.onPatch ?? noopPatch;
+    this.onDataset = opts.onDataset ?? noopDataset;
   }
 
   static async create(opts: LearningSystemOptions): Promise<LearningSystem> {
     const state = await loadLearningState(opts.store);
     const engine = opts.engine ?? new LearningEngine(state);
-    const sys = new LearningSystem(engine, state, store, opts);
-    sys.initialized = true;
-    return sys;
+    return new LearningSystem(engine, state, opts.store, opts);
   }
 
   recordOutcome(input: {
@@ -72,12 +66,11 @@ export class LearningSystem implements LearningObserver {
   }
 
   async addRating(
-    replyId: string,
+    _replyId: string,
     chatId: string,
     rating: number,
     comment?: string,
   ): Promise<void> {
-    void replyId;
     void chatId;
     void comment;
     this.engine.ingestFeedback(rating);
@@ -87,7 +80,7 @@ export class LearningSystem implements LearningObserver {
   /** Drain the fine-tune dataset and notify the callback. */
   async drainDataset(): Promise<DatasetEntry[]> {
     const entries = this.engine.drainDataset();
-    if (entries.length && this.onDataset) {
+    if (entries.length) {
       await this.onDataset(entries);
     }
     return entries;
@@ -96,8 +89,7 @@ export class LearningSystem implements LearningObserver {
   /** Run distillation, apply the patch, and persist. */
   async distill(): Promise<PersonaPatch> {
     const { patch } = this.engine.distill();
-    this.state = this.engine.getState();
-    if (this.onPatch) await this.onPatch(patch);
+    await this.onPatch(patch);
     await this.persist();
     return patch;
   }
@@ -110,6 +102,14 @@ export class LearningSystem implements LearningObserver {
   getState(): LearningState {
     return this.engine.getState();
   }
+}
+
+function noopPatch(_patch: PersonaPatch): void {
+  // no-op
+}
+
+function noopDataset(_entries: DatasetEntry[]): void {
+  // no-op
 }
 
 /** A LearningObserver that does nothing. Useful when learning is off. */

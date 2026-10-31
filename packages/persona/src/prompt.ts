@@ -25,8 +25,8 @@ export function buildSystemPrompt(
   persona: Persona,
   opts: PromptOptions = {},
 ): string {
-  const weights = opts.weights ?? {
-    maxWords: 15,
+  const weights: PromptWeights = opts.weights ?? {
+    maxWords: opts.maxWords ?? 15,
     exampleBoost: 1,
     styleGuideStrength: 1,
     extraRules: [],
@@ -61,7 +61,13 @@ export function buildSystemPrompt(
       ? persona.styleGuide
       : persona.styleGuide
           .split(/\n+/)
-          .slice(0, Math.ceil(persona.styleGuide.split(/\n+/).length * weights.styleGuideStrength))
+          .slice(
+            0,
+            Math.ceil(
+              persona.styleGuide.split(/\n+/).length *
+                weights.styleGuideStrength,
+            ),
+          )
           .join("\n")
     : "";
 

@@ -5,13 +5,13 @@ puts them together. Transports and model providers plug in through ports defined
 `@persona/core`.
 
 ```
-            ┌────────────── examples/persona (example) ──────────────┐
-            │ config · model (OpenRouter) · node.ts · worker.ts  │
+            ┌────────────── examples/bot (example) ──────────────┐
+            │ config · model (OpenRouter) · node.ts · worker.ts      │
             └───────────────────────┬────────────────────────────┘
-                                    │ createPersona()
+                                     │ createPersona()
 ┌───────────────────────────────────▼────────────────────────────┐
-│ @persona/persona   pipeline · prompt · guards                  │
-│   uses: @persona/memory   @persona/policy   @persona/schemas   │
+│ @persona/persona   pipeline · prompt · guards · learning        │
+│   uses: @persona/memory   @persona/policy   @persona/schemas    │
 └───────────────────────────────────┬────────────────────────────┘
                                     │ ports (types)
                         ┌───────────▼───────────┐
@@ -29,12 +29,18 @@ dedupe → command → paused? → policy → rate limit → describe media →
 generate → transforms → empty check → guards → send → history
 ```
 
+After a reply is sent, the pipeline calls `learning.recordOutcome(...)`. The
+learning engine uses that signal to tune `PromptWeights` and `RecallWeights`,
+and periodically distills a `PersonaPatch` of facts, phrases and style-guide
+lines. Admins can rate replies with `!good`/`!bad` and run `!distill`.
+
 ### HandleResult
 
 `handle()` never throws. It returns one of:
 
 - `{ kind: "replied" }`: the message was sent.
-- `{ kind: "command" }`: a command (`!whois`, `!pause`, `!resume`) ran.
+- `{ kind: "command" }`: a command (`!whois`, `!pause`, `!resume`, `!good`, `!bad`,
+  `!weights`, `!dataset`, `!learn`, `!distill`) ran.
 - `{ kind: "skipped", reason }`: no reply. Reasons: `duplicate`, `paused`, `not-addressed`,
   `rate-limited`, `empty`, `guard`.
 - `{ kind: "failed", error }`: sending or generating failed.
@@ -47,6 +53,7 @@ generate → transforms → empty check → guards → send → history
 - Dedupe key is `${channel.name}:${msg.id}`.
 - The rate limiter is keyed per chat and counts every model call, including failed ones.
 - The system prompt is sent on every model call. Recalled messages are appended to it when `recallLimit > 0`.
+- The system prompt may be a getter so the learning engine can swap it at runtime.
 - Groups: user turn is `"${senderName}: ${text}"`.
 
 ## Dependency Rules
@@ -57,6 +64,7 @@ generate → transforms → empty check → guards → send → history
 | `schemas` | zod |
 | `policy` | `core` |
 | `memory` | `core` |
+| `learning` | `core`, `schemas` |
 | `persona` | `core`, `schemas`, `policy`, `memory` |
 | `whatsapp` | `core`, zod, `@openchannelprotocol/sdk`, `baileys` (`/baileys` only) |
 | `kv` | `core` |

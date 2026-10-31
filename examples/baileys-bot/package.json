@@ -1,1 +1,0 @@
-{"name":"@persona/baileys-bot","version":"1.0.0","private":true,"type":"module","scripts":{"start":"bun src/index.ts","typecheck":"tsc --noEmit"},"dependencies":{"@persona/core":"workspace:*","@persona/persona":"workspace:*","@persona/schemas":"workspace:*"},"devDependencies":{"@types/node":"^26.6.6","typescript":"^7.0.2"}}

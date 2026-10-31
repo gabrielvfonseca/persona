@@ -65,7 +65,10 @@ export function createMemory(opts: MemoryOptions = {}): Memory {
     nodes,
     embedder,
   });
-  let recallWeights: RecallWeights = { ...DEFAULT_RECALL, ...opts.recallWeights };
+  let recallWeights: RecallWeights = {
+    ...DEFAULT_RECALL,
+    ...opts.recallWeights,
+  };
 
   async function remember(
     chatId: string,

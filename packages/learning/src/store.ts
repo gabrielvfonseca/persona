@@ -1,4 +1,9 @@
-import type { LearningState, PersonaPatch, PromptWeights, RecallWeights } from "@persona/core";
+import type {
+  LearningState,
+  PersonaPatch,
+  PromptWeights,
+  RecallWeights,
+} from "@persona/core";
 
 /** Defaults a brand-new learning state. */
 export const DEFAULT_PROMPT_WEIGHTS: PromptWeights = {
@@ -42,7 +47,10 @@ export async function loadLearningState(
   const raw = await store.get(KEY);
   if (!raw) return defaultLearningState();
   try {
-    return mergeLearningState(defaultLearningState(), JSON.parse(raw) as Partial<LearningState>);
+    return mergeLearningState(
+      defaultLearningState(),
+      JSON.parse(raw) as Partial<LearningState>,
+    );
   } catch {
     return defaultLearningState();
   }
@@ -71,7 +79,7 @@ export function mergeLearningState(
 }
 
 /** Clamp a number to a range and round to a step. */
-function clamp(value: number, min: number, max: number, step: number): number {
+function _clamp(value: number, min: number, max: number, step: number): number {
   const clamped = Math.max(min, Math.min(max, value));
   return Math.round(clamped / step) * step;
 }

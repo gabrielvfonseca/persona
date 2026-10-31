@@ -1,7 +1,7 @@
 import type { Channel, Turn } from "@persona/core";
 import { createMemory } from "@persona/memory";
 import { parsePersona } from "@persona/schemas";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createPersona } from "../src/index";
 
 const persona = parsePersona({
@@ -35,7 +35,7 @@ function setup(generate: (s: string, m: Turn[]) => string = () => "ok") {
 
 describe("persona learning wiring", () => {
   it("applies a persona patch and rebuilds the system prompt", async () => {
-    const { channel, generator, calls } = setup();
+    const { channel, generator } = setup();
     const bot = createPersona({
       persona,
       channel,

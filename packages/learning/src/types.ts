@@ -2,8 +2,8 @@ export type {
   DatasetEntry,
   FeedbackSink,
   LearningObserver,
+  LearningState,
   PersonaPatch,
   PromptWeights,
   RecallWeights,
-  LearningState,
 } from "@persona/core";

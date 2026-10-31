@@ -1,17 +1,17 @@
 # Deployment reference
 
-Two ways to run the bot. Both are built from `examples/persona`.
+Two ways to run the bot. Both are built from `examples/bot`.
 
 | Transport | Runs on | Entry point | Runbook |
 |---|---|---|---|
-| Linked device (Baileys) | A VPS or any host with a persistent disk | `examples/persona/src/node.ts` | [DEPLOY.md](../DEPLOY.md) |
-| Cloud API (official webhook) | Cloudflare Workers | `examples/persona/src/worker.ts` | This page |
+| Linked device (Baileys) | A VPS or any host with a persistent disk | `examples/bot/src/node.ts` | [DEPLOY.md](../DEPLOY.md) |
+| Cloud API (official webhook) | Cloudflare Workers | `examples/bot/src/worker.ts` | This page |
 
 Only one linked-device instance may run per WhatsApp account.
 
 ## Environment variables
 
-Every variable is validated by `examples/persona/src/config.ts`. A missing or invalid value
+Every variable is validated by `examples/bot/src/config.ts`. A missing or invalid value
 stops startup and lists every problem at once.
 
 | Variable | Linked device | Cloud API | Description |
@@ -33,12 +33,22 @@ stops startup and lists every problem at once.
 | `WHATSAPP_VERIFY_TOKEN` | Not used | Required | Token you enter in the Meta dashboard |
 | `ADMIN_KEY` | Not used | Required | Basic auth password for `/cf-bot/*` and `/admin/*` |
 
+### Continuous learning (optional, linked device and Cloud API)
+
+| Variable | Default | Description |
+|---|---|---|
+| `LEARNING_ENABLED` | off | Set to `true` to turn on continuous learning |
+| `LEARNING_WARMUP` | `5` | Outcomes and ratings before weights start to move |
+| `LEARNING_STEP` | `0.5` | Step size for weight nudges |
+| `LEARNING_DISTILL_EVERY` | `20` | Run distillation every N outcomes |
+| `LEARNING_MAX_PATCH` | `5` | Maximum facts and phrases per patch |
+
 ## Cloud API on Cloudflare Workers
 
-Deploy from `examples/persona`:
+Deploy from `examples/bot`:
 
 ```bash
-cd examples/persona
+cd examples/bot
 wrangler secret put OPENROUTER_API_KEY
 wrangler secret put PERSONA_JSON < data/persona.json
 # ...and the other secrets listed above
@@ -48,7 +58,7 @@ wrangler deploy
 `PERSONA_JSON` holds the whole persona file, so the bundle needs no data file. The Worker
 fails with a clear message if it is missing.
 
-Configuration lives in `examples/persona/wrangler.toml`:
+Configuration lives in `examples/bot/wrangler.toml`:
 
 ```toml
 name = "persona-bot"
@@ -79,6 +89,6 @@ Do not add `[vars]` to `wrangler.toml`; it would overwrite values set in the das
 ## Local checks
 
 ```bash
-bun run --cwd examples/persona simulate   # offline run with a fake model
-bunx wrangler deploy --dry-run        # from examples/persona: bundles the Worker
+bun run --cwd examples/bot simulate   # offline run with a fake model
+bunx wrangler deploy --dry-run        # from examples/bot: bundles the Worker
 ```

@@ -39,8 +39,9 @@ export function wasFailed(outcome: Outcome): boolean {
 
 /** The user turn that triggered this outcome, if any. */
 export function userTurn(outcome: Outcome): Turn | undefined {
-  const text = outcome.msg.isGroup && outcome.msg.senderName
-    ? `${outcome.msg.senderName}: ${outcome.msg.text}`
-    : outcome.msg.text;
+  const text =
+    outcome.msg.isGroup && outcome.msg.senderName
+      ? `${outcome.msg.senderName}: ${outcome.msg.text}`
+      : outcome.msg.text;
   return { role: "user", content: text };
 }

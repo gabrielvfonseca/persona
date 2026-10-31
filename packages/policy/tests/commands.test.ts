@@ -9,7 +9,7 @@ describe("createCommands", () => {
       botName: "TestBot",
       state,
     });
-    expect(commands.commands.length).toBe(3);
+    expect(commands.commands.length).toBe(9);
     expect(commands.whois.name).toBe("!whois");
     expect(commands.pause.name).toBe("!pause");
     expect(commands.resume.name).toBe("!resume");

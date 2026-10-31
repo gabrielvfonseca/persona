@@ -6,8 +6,8 @@ import type {
   HistoryStore,
   ImageDescriber,
   IncomingMessage,
-  Logger,
   LearningObserver,
+  Logger,
   MessageHandler,
   RateLimiter,
   ReplyGenerator,
@@ -29,8 +29,8 @@ export interface PersonaBotOptions {
   state?: BotState | undefined;
   describer?: ImageDescriber | undefined;
   commands?: ReturnType<typeof createCommands> | undefined;
-  /** System prompt sent with every model call. */
-  systemPrompt?: string | undefined;
+  /** System prompt sent with every model call. May be a string or a getter. */
+  systemPrompt?: string | (() => string) | undefined;
   /** Applied to the model reply in order, before guards. */
   transforms?: ReplyTransform[] | undefined;
   /** Run after transforms and the empty check. */
@@ -59,6 +59,11 @@ export function createPersonaBot(opts: PersonaBotOptions): PersonaBot {
   const botState = opts.state ?? { paused: false, setPaused: () => {} };
   const learning = opts.learning;
 
+  function resolveSystem(): string {
+    const sp = opts.systemPrompt;
+    return typeof sp === "function" ? sp() : (sp ?? "");
+  }
+
   async function handle(msg: IncomingMessage): Promise<HandleResult> {
     try {
       return await run(msg);
@@ -67,7 +72,7 @@ export function createPersonaBot(opts: PersonaBotOptions): PersonaBot {
       learning?.recordOutcome({
         msg,
         result: { kind: "failed", error },
-        systemPrompt: opts.systemPrompt ?? "",
+        systemPrompt: resolveSystem(),
         historyTurns: [],
         recallLines: [],
       });
@@ -108,7 +113,7 @@ export function createPersonaBot(opts: PersonaBotOptions): PersonaBot {
     }
 
     const userContent = await buildUserContent(msg);
-    const system = await withRecall(msg, opts.systemPrompt ?? "");
+    const system = await withRecall(msg, resolveSystem());
     const historyTurns = await history.load(msg.chatId);
 
     let reply: string;

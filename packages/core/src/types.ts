@@ -141,4 +141,5 @@ export interface DatasetEntry {
   completion: string;
   chatId: string;
   timestamp: number;
+  historyTurns?: Turn[] | undefined;
 }

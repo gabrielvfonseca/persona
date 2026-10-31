@@ -9,11 +9,12 @@ depends only on the packages below it in this table.
 | `@persona/schemas` | The persona file format and its parser. | zod |
 | `@persona/policy` | Who the bot answers and which admin commands run. | core |
 | `@persona/memory` | Chat history, memory nodes, search index, dedupe, rate limits. | core |
+| `@persona/learning` | Continuous learning: outcomes, feedback, weight tuning, persona patches, fine-tune dataset. | core, schemas |
 | `@persona/persona` | **Main SDK.** Builds a bot from a persona, a model and a channel. | core, schemas, policy, memory |
 | `@persona/whatsapp` | WhatsApp transports: Cloud API (`/cloud`) and linked device (`/baileys`). | core, zod, @openchannelprotocol/sdk, baileys |
 | `@persona/kv` | Key-value storage: history, dedupe, rate limits, pause state. | core |
 
-Example app: `examples/persona`. It is the only place that picks a model provider.
+Example app: `examples/bot`. It is the only place that picks a model provider.
 
 ## @persona/persona (the SDK)
 
@@ -47,18 +48,35 @@ Options for `createPersona`:
 |---|---|---|
 | `policy.direct` | `"addressed"` | `"always"` answers every direct chat. |
 | `policy.group` | `"addressed"` | Groups answer only when named or tagged. |
-| `admins` | `[]` | Phone numbers or ids for `!pause` and `!resume`. |
+| `admins` | `[]` | Phone numbers or ids for `!pause`, `!resume`, `!good`, `!bad`, `!weights`, `!dataset`, `!learn`, `!distill`. |
 | `memory` | `createMemory()` | Pass your own to use KV, files or a different limit. |
 | `recallLimit` | `0` | Past messages from the same chat added to each prompt. `0` is off. |
 | `transforms` | speaker prefix, first sentence | Replaces the defaults. |
 | `guards` | `noEcho` | Added to the built-in empty-reply check. |
 | `prompt` | see `PromptOptions` | `maxWords`, `extraRules`, `admitBeingABot`, and more. |
+| `learning` | none | A `LearningObserver` that records outcomes for continuous learning. |
+| `weights` | defaults | Tunable prompt weights, adjusted by the learning engine. |
+| `onPatch` | none | Called with a persona patch after distillation. |
+| `setPromptWeights` | none | Update the prompt weights at runtime. |
+| `setRecallWeights` | none | Update the recall fusion weights at runtime. |
+
+## @persona/learning
+
+| Export | Purpose |
+|---|---|
+| `LearningEngine` | Tunable weights, distillation, dataset collection. |
+| `LearningSystem` | Wires the engine to the pipeline. `recordOutcome` is the `LearningObserver`; `addRating` is the `FeedbackSink`. |
+| `noopLearningObserver`, `noopFeedbackSink` | No-op implementations for when learning is off. |
+| `defaultLearningState`, `applyPatch` | Defaults and patch helpers. |
+
+The engine tunes `PromptWeights` (maxWords, exampleBoost, styleGuideStrength, extraRules) and `RecallWeights` (keywordWeight, semanticWeight, rrfK). Distillation runs every N outcomes and produces a `PersonaPatch` of facts, phrases and style-guide lines.
 
 ## @persona/memory
 
 | Export | Purpose |
 |---|---|
-| `createMemory(opts?)` | Returns `{ nodes, history, dedupe, rateLimiter, state, remember, learn, recall }`. `recall` is async. Pass an `embedder` for semantic recall. |
+| `createMemory(opts?)` | Returns `{ nodes, history, dedupe, rateLimiter, state, remember, learn, recall, setRecallWeights }`. `recall` is async. Pass an `embedder` for semantic recall. |
+| `fuseWeighted`, `weightedReciprocalRankFusion` | Weighted fusion of ranked node lists. |
 | `NodeStore` | Stores nodes per chat, indexed by keyword (BM25) and by embedding (cosine). `add`, `get`, `recent`, `search`, `nearest`. |
 | `learn(text)` | Adds shared knowledge that every chat can recall. |
 | `reciprocalRankFusion`, `cosine`, `embedOrUndefined` | Ranking helpers. A failed embedding falls back to keyword search. |
@@ -66,7 +84,7 @@ Options for `createPersona`:
 | `MemoryHistoryStore` | A `HistoryStore`. Returns the last `maxTurns` (default 20); older turns stay searchable. |
 | `MemoryDedupeStore`, `FixedWindowRateLimiter`, `MemoryBotState` | In-memory stores. The limiter keeps one window per key. |
 
-Memory is in-process. Persist it by passing your own `HistoryStore` (see `examples/persona/src/worker.ts`, which uses KV).
+Memory is in-process. Persist it by passing your own `HistoryStore` (see `examples/bot/src/worker.ts`, which uses KV).
 
 ## @persona/policy
 
@@ -74,7 +92,7 @@ Memory is in-process. Persist it by passing your own `HistoryStore` (see `exampl
 |---|---|
 | `createReplyPolicy(opts)` | Decides `always` or `never` per message. Names are matched on word boundaries. |
 | `mentionsName(text, name)` | The name matcher on its own. |
-| `createCommands(opts)` | `!whois` (anyone), `!pause` and `!resume` (admins). |
+| `createCommands(opts)` | `!whois` (anyone), `!pause`, `!resume`, `!good`, `!bad`, `!weights`, `!dataset`, `!learn`, `!distill` (admins). Pass `onRate`, `onWeights`, `onDataset`, `onDistill` to wire the learning engine. |
 
 
 | Export | Purpose |
@@ -120,4 +138,4 @@ Workers WebSocket shim.
 ## @persona/kv
 
 `kvHistoryStore`, `kvDedupeStore`, `loadKvBotState` (pause state), `kvRateLimiter`.
-`basicAuth` lives in `examples/persona`, not in a package.
+`basicAuth` lives in `examples/bot`, not in a package.
