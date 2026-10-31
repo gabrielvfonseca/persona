@@ -6,9 +6,10 @@ export function loadPersona(path: string): Persona {
   let raw: unknown;
   try {
     raw = JSON.parse(readFileSync(path, "utf8"));
-  } catch {
+  } catch (err) {
     throw new Error(
-      `Cannot read persona file ${path}. Build it first: bun run ingest <export.txt> --person "<Name>"`,
+      `Cannot read persona file ${path}. Copy data/persona.example.json and edit it to create one.`,
+      { cause: err }
     );
   }
   return parsePersona(raw);

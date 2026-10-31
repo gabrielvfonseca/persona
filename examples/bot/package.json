@@ -11,6 +11,7 @@
     "dev": "bun --watch src/node.ts",
     "fix": "biome check --write",
     "groups": "bun scripts/groups.ts",
+    "import-chat": "bun scripts/import-chat.ts",
     "ingest": "bun scripts/ingest.ts",
     "simulate": "bun scripts/simulate.ts",
     "test": "vitest run",

@@ -1,6 +1,6 @@
 /**
  * Runs a short scripted conversation through the SDK with a fake model and a
- * console channel. No WhatsApp or OpenRouter account needed.
+ * console channel. No WhatsApp account or model download needed.
  *
  *   bun run simulate [persona.json]
  */
@@ -15,26 +15,27 @@ const persona = parsePersona(JSON.parse(readFileSync(personaPath, "utf8")));
 
 const channel: Channel = {
   name: "console",
-  async send(chatId, text) {
+  send(chatId, text) {
     console.log(`  bot -> ${chatId}: ${text}`);
+    return Promise.resolve();
   },
 };
 
 // A stand-in model that echoes the last user line. No colon, so the speaker-prefix transform keeps it.
 const generator = {
-  async generate(_system: string, messages: Turn[]) {
+  generate(_system: string, messages: Turn[]) {
     const last = messages.at(-1)?.content ?? "";
-    return `Sure, ${last.slice(0, 40)}`;
+    return Promise.resolve(`Sure, ${last.slice(0, 40)}`);
   },
 };
 
 const bot = createPersona({
-  persona,
+  admins: ["5511999999999"],
   channel,
   generator,
-  admins: ["5511999999999"],
-  policy: { direct: "always" },
   logger: console,
+  persona,
+  policy: { direct: "always" },
 });
 
 const script: [string, string][] = [
@@ -49,6 +50,7 @@ console.log(`Simulating ${persona.name} (${personaPath})`);
 console.log(`System prompt: ${bot.systemPrompt.split("\n")[0]}`);
 for (const [chatId, text] of script) {
   console.log(`${chatId} <- ${text}`);
-  const result = await bot.handle({ id: crypto.randomUUID(), chatId, text });
+  // biome-ignore lint/performance/noAwaitInLoops: each reply should land before the next message is sent, as in a real chat
+  const result = await bot.handle({ chatId, id: crypto.randomUUID(), text });
   console.log(`  result: ${result.kind}`);
 }

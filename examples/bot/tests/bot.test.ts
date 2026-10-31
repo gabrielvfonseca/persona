@@ -1,32 +1,30 @@
 import type { Channel, IncomingMessage, Turn } from "@persona/core";
 import { createPersona } from "@persona/persona";
 import { parsePersona } from "@persona/schemas";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import persona from "../data/persona.example.json";
 import { buildBot } from "../src/bot";
 import { parseConfig } from "../src/config";
 
-// Keep the transport test offline: the real adapter would call OpenRouter.
-vi.mock("../src/model", () => ({
-  openRouterGenerator: () => ({ generate: async () => "ok" }),
-  openRouterDescriber: () => ({ describe: async () => "" }),
-}));
+/** A model stand-in for buildBot: replies "ok" without loading anything. */
+const stubGenerator = { generate: () => Promise.resolve("ok") };
 
 const ADMIN = "5511999999999";
 const env = {
-  PERSONA_CONSENT: "true",
-  PERSONA_NAME: "Ana",
-  PERSONA_MODEL: "m",
-  OPENROUTER_API_KEY: "k",
   ADMIN_NUMBERS: ADMIN,
+  DATABASE_URL: "postgres://persona:persona@localhost:5432/persona",
+  PERSONA_CONSENT: "true",
+  PERSONA_MODEL: "qwen2.5-0.5b",
+  PERSONA_NAME: "Ana",
 };
 
 function fakeChannel() {
   const sent: { chatId: string; text: string }[] = [];
   const channel: Channel = {
     name: "test",
-    async send(chatId, text) {
+    send(chatId, text) {
       sent.push({ chatId, text });
+      return Promise.resolve();
     },
   };
   return { channel, sent };
@@ -37,17 +35,17 @@ function fakeGenerator() {
   return {
     calls,
     generator: {
-      async generate(system: string, messages: Turn[]) {
-        calls.push({ system, messages });
-        return `reply ${calls.length}`;
+      generate(system: string, messages: Turn[]) {
+        calls.push({ messages, system });
+        return Promise.resolve(`reply ${calls.length}`);
       },
     },
   };
 }
 
 const msg = (over: Partial<IncomingMessage>): IncomingMessage => ({
-  id: crypto.randomUUID(),
   chatId: "dm-1",
+  id: crypto.randomUUID(),
   text: "hi",
   ...over,
 });
@@ -57,14 +55,25 @@ describe("example persona bot", () => {
     const { channel, sent } = fakeChannel();
     const { calls, generator } = fakeGenerator();
     const bot = createPersona({
-      persona: parsePersona(persona),
       channel,
       generator,
+      logger: {
+        error() {
+          /* intentionally empty */
+        },
+        info() {
+          /* intentionally empty */
+        },
+        warn() {
+          /* intentionally empty */
+        },
+      },
+      persona: parsePersona(persona),
       policy: { direct: "always" },
-      logger: { info() {}, warn() {}, error() {} },
     });
 
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 5; i += 1) {
+      // biome-ignore lint/performance/noAwaitInLoops: messages must be handled in the order they arrive
       const result = await bot.handle(msg({ text: `message ${i}` }));
       expect(result.kind).toBe("replied");
     }
@@ -81,24 +90,34 @@ describe("example persona bot", () => {
     const { channel, sent } = fakeChannel();
     const { generator } = fakeGenerator();
     const bot = createPersona({
-      persona: parsePersona(persona),
       channel,
       generator,
-      logger: { info() {}, warn() {}, error() {} },
+      logger: {
+        error() {
+          /* intentionally empty */
+        },
+        info() {
+          /* intentionally empty */
+        },
+        warn() {
+          /* intentionally empty */
+        },
+      },
+      persona: parsePersona(persona),
     });
 
     const quiet = await bot.handle(
-      msg({ isGroup: true, senderName: "Bia", text: "anyone?" }),
+      msg({ isGroup: true, senderName: "Bia", text: "anyone?" })
     );
     expect(quiet).toEqual({ kind: "skipped", reason: "not-addressed" });
 
     const named = await bot.handle(
       msg({
+        chatId: "g-1",
         isGroup: true,
         senderName: "Bia",
         text: "Ana, você vem?",
-        chatId: "g-1",
-      }),
+      })
     );
     expect(named.kind).toBe("replied");
     expect(sent.at(-1)?.chatId).toBe("g-1");
@@ -108,68 +127,66 @@ describe("example persona bot", () => {
     const { channel, sent } = fakeChannel();
     const { generator } = fakeGenerator();
     const bot = createPersona({
-      persona: parsePersona(persona),
+      admins: [ADMIN],
       channel,
       generator,
-      admins: [ADMIN],
+      logger: {
+        error() {
+          /* intentionally empty */
+        },
+        info() {
+          /* intentionally empty */
+        },
+        warn() {
+          /* intentionally empty */
+        },
+      },
+      persona: parsePersona(persona),
       policy: { direct: "always" },
-      logger: { info() {}, warn() {}, error() {} },
     });
 
     const stranger = await bot.handle(
-      msg({ text: "!pause", chatId: "5500000000000@s.whatsapp.net" }),
+      msg({ chatId: "5500000000000@s.whatsapp.net", text: "!pause" })
     );
     expect(stranger.kind).toBe("replied");
 
     const admin = `${ADMIN}@s.whatsapp.net`;
     expect(
-      (await bot.handle(msg({ text: "!pause", chatId: admin }))).kind,
+      (await bot.handle(msg({ chatId: admin, text: "!pause" }))).kind
     ).toBe("command");
     expect(bot.state.paused).toBe(true);
-    expect(await bot.handle(msg({ text: "hello", chatId: "dm-2" }))).toEqual({
+    expect(await bot.handle(msg({ chatId: "dm-2", text: "hello" }))).toEqual({
       kind: "skipped",
       reason: "paused",
     });
 
     expect(
-      (await bot.handle(msg({ text: "!resume", chatId: admin }))).kind,
+      (await bot.handle(msg({ chatId: admin, text: "!resume" }))).kind
     ).toBe("command");
     expect(bot.state.paused).toBe(false);
     expect(sent.at(-1)?.text).toBe("Bot resumed.");
   });
 
-  it("answers every direct chat on a linked device but only addressed ones on the Cloud API", async () => {
+  it("answers every direct chat", async () => {
     const { channel } = fakeChannel();
-    const logger = { info() {}, warn() {}, error() {} };
-    const linked = buildBot({
-      config: parseConfig(env, "linked-device"),
-      persona: parsePersona(persona),
+    const bot = await buildBot({
       channel,
-      transport: "linked-device",
-      logger,
-    });
-    const cloud = buildBot({
-      config: parseConfig(
-        {
-          ...env,
-          WHATSAPP_ACCESS_TOKEN: "a",
-          WHATSAPP_APP_SECRET: "b",
-          WHATSAPP_PHONE_NUMBER_ID: "1",
-          WHATSAPP_VERIFY_TOKEN: "v",
-          ADMIN_KEY: "k",
+      config: parseConfig(env),
+      generator: stubGenerator,
+      logger: {
+        error() {
+          /* intentionally empty */
         },
-        "cloud-api",
-      ),
+        info() {
+          /* intentionally empty */
+        },
+        warn() {
+          /* intentionally empty */
+        },
+      },
       persona: parsePersona(persona),
-      channel,
-      transport: "cloud-api",
-      logger,
     });
 
-    expect((await linked.handle(msg({ text: "oi" }))).kind).toBe("replied");
-    expect(await cloud.handle(msg({ text: "oi" }))).toEqual({
-      kind: "skipped",
-      reason: "not-addressed",
-    });
+    expect((await bot.handle(msg({ text: "oi" }))).kind).toBe("replied");
   });
 });

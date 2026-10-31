@@ -2,7 +2,7 @@
   "version": 1,
   "name": "Ana",
   "styleGuide": "Short, warm and casual. Lowercase is fine. Uses one emoji at most.",
-  "languageHint": "pt-BR",
+  "languageHint": "pt-PT",
   "stats": { "medianLen": 18, "p90Len": 52, "messageCount": 1200 },
   "quotes": [
     "haha sim, bora",

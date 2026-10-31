@@ -1,86 +1,49 @@
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import type {
-  Embedder,
-  ImageDescriber,
-  ReplyGenerator,
-  Turn,
-} from "@persona/core";
-import { generateText } from "ai";
-import { z } from "zod";
+import type { ModelId, ModelSource } from "ggml-node";
 
-export interface OpenRouterOptions {
-  apiKey: string;
-  model: string;
+const PATTERN_1 = /\.gguf$/iu;
+const PATTERN_2 = /^[./~]/u;
+
+/** Registry models that ggml-node can download and run by id. */
+export const REGISTRY_MODELS = [
+  "qwen2.5-0.5b",
+  "qwen2.5-1.5b",
+  "smollm2-360m",
+] as const;
+
+export type RegistryModel = (typeof REGISTRY_MODELS)[number];
+
+// Fails to compile if ggml-node adds or removes a registry model. The embedding
+// model is listed so the check is exhaustive, but it is not a valid PERSONA_MODEL.
+export const registryIsExhaustive: Record<ModelId, true> = {
+  "bge-small-en-v1.5": true,
+  "qwen2.5-0.5b": true,
+  "qwen2.5-1.5b": true,
+  "smollm2-360m": true,
+};
+
+export const DEFAULT_MODEL: RegistryModel = "qwen2.5-0.5b";
+
+export function isRegistryModel(value: string): value is RegistryModel {
+  return (REGISTRY_MODELS as readonly string[]).includes(value);
 }
 
-/** Text replies through OpenRouter. Short output, low temperature. */
-export function openRouterGenerator(opts: OpenRouterOptions): ReplyGenerator {
-  const provider = createOpenRouter({ apiKey: opts.apiKey });
-  return {
-    async generate(system: string, messages: Turn[]): Promise<string> {
-      const { text } = await generateText({
-        maxOutputTokens: 60,
-        messages,
-        model: provider.chat(opts.model),
-        system,
-        temperature: 0.2,
-      });
-      return text ?? "";
-    },
-  };
+/** A value that names a GGUF file on disk rather than a registry id. */
+export function isGgufPath(value: string): boolean {
+  return PATTERN_1.test(value) || PATTERN_2.test(value);
 }
 
-/** One-line image descriptions through an OpenRouter vision model. */
-export function openRouterDescriber(opts: OpenRouterOptions): ImageDescriber {
-  const provider = createOpenRouter({ apiKey: opts.apiKey });
-  return {
-    async describe(data: Uint8Array, mime: string): Promise<string> {
-      const { text } = await generateText({
-        maxOutputTokens: 60,
-        messages: [
-          {
-            content: [
-              { text: "Describe this image in a few words.", type: "text" },
-              { image: Buffer.from(data), mediaType: mime, type: "image" },
-            ],
-            role: "user",
-          },
-        ],
-        model: provider.chat(opts.model),
-      });
-      return (text ?? "").trim();
-    },
-  };
-}
-
-const embeddingResponse = z.object({
-  data: z.array(
-    z.object({ index: z.number().int(), embedding: z.array(z.number()) }),
-  ),
-});
-
-export interface OpenRouterEmbedderOptions extends OpenRouterOptions {
-  fetch?: typeof fetch | undefined;
-}
-
-/** Embeddings through OpenRouter's OpenAI-compatible endpoint. */
-export function openRouterEmbedder(opts: OpenRouterEmbedderOptions): Embedder {
-  const doFetch = opts.fetch ?? fetch;
-  return {
-    async embed(texts: readonly string[]): Promise<number[][]> {
-      if (texts.length === 0) return [];
-      const res = await doFetch("https://openrouter.ai/api/v1/embeddings", {
-        body: JSON.stringify({ input: texts, model: opts.model }),
-        headers: {
-          Authorization: `Bearer ${opts.apiKey}`,
-          "content-type": "application/json",
-        },
-        method: "POST",
-      });
-      if (!res.ok) throw new Error(`Embeddings request failed: ${res.status}`);
-      const parsed = embeddingResponse.parse(await res.json());
-      const sorted = [...parsed.data].sort((a, b) => a.index - b.index);
-      return sorted.map((d) => d.embedding);
-    },
-  };
+/**
+ * Turns the PERSONA_MODEL value into a ggml-node model source. Accepts a
+ * registry id, or a path to a GGUF file (for example a fine-tuned model).
+ */
+export function toModelSource(value: string): ModelSource {
+  if (isRegistryModel(value)) {
+    return value;
+  }
+  if (isGgufPath(value)) {
+    return { path: value };
+  }
+  throw new Error(
+    `Unknown model "${value}". Use one of ${REGISTRY_MODELS.join(", ")} or a path to a .gguf file.`
+  );
 }
