@@ -7,7 +7,12 @@ function stubCommands(result: { handled: boolean; reply?: string }) {
   const real = createCommands({
     adminNumbers: [],
     botName: "Ana",
-    state: { paused: false, setPaused() {} },
+    state: {
+      paused: false,
+      setPaused() {
+        /* intentionally empty */
+      },
+    },
   });
   return { ...real, handle: vi.fn().mockResolvedValue(result) };
 }
@@ -19,29 +24,29 @@ describe("createPersonaBot", () => {
       send: vi.fn().mockResolvedValue(undefined),
     };
     const history = {
-      load: vi.fn().mockResolvedValue([]),
       append: vi.fn().mockResolvedValue(undefined),
+      load: vi.fn().mockResolvedValue([]),
     };
     const generator = {
       generate: vi.fn().mockResolvedValue("Hello!"),
     };
     const logger = {
+      error: vi.fn(),
       info: vi.fn(),
       warn: vi.fn(),
-      error: vi.fn(),
     };
     const policy = createReplyPolicy({ direct: "always", group: "always" });
-    return { channel, history, generator, logger, policy };
+    return { channel, generator, history, logger, policy };
   };
 
   it("creates bot with options", () => {
     const mocks = createMocks();
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     expect(bot.handle).toBeDefined();
     expect(bot.state).toBeDefined();
@@ -51,14 +56,14 @@ describe("createPersonaBot", () => {
     const mocks = createMocks();
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(result.kind).toBe("replied");
@@ -74,15 +79,15 @@ describe("createPersonaBot", () => {
     };
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       dedupe,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(result.kind).toBe("skipped");
@@ -98,15 +103,15 @@ describe("createPersonaBot", () => {
     };
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       dedupe,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(dedupe.set).toHaveBeenCalledWith("test:msg1", 300_000);
@@ -117,15 +122,15 @@ describe("createPersonaBot", () => {
     const state = { paused: true, setPaused: vi.fn() };
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
-      state,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
+      state,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(result.kind).toBe("skipped");
@@ -138,14 +143,14 @@ describe("createPersonaBot", () => {
     const policy = createReplyPolicy({ direct: "never", group: "never" });
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       generator: mocks.generator,
-      policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(result.kind).toBe("skipped");
@@ -157,15 +162,15 @@ describe("createPersonaBot", () => {
     const commands = stubCommands({ handled: true, reply: "Pong" });
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
-      generator: mocks.generator,
-      policy: mocks.policy,
-      logger: mocks.logger,
       commands,
+      generator: mocks.generator,
+      history: mocks.history,
+      logger: mocks.logger,
+      policy: mocks.policy,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "!ping",
     });
     expect(result.kind).toBe("command");
@@ -177,15 +182,15 @@ describe("createPersonaBot", () => {
     const commands = stubCommands({ handled: true });
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
-      generator: mocks.generator,
-      policy: mocks.policy,
-      logger: mocks.logger,
       commands,
+      generator: mocks.generator,
+      history: mocks.history,
+      logger: mocks.logger,
+      policy: mocks.policy,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "!silent",
     });
     expect(result.kind).toBe("command");
@@ -198,15 +203,15 @@ describe("createPersonaBot", () => {
     const commands = stubCommands({ handled: true, reply: "Pong" });
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
-      generator: mocks.generator,
-      policy: mocks.policy,
-      logger: mocks.logger,
       commands,
+      generator: mocks.generator,
+      history: mocks.history,
+      logger: mocks.logger,
+      policy: mocks.policy,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "!ping",
     });
     expect(result.kind).toBe("failed");
@@ -219,15 +224,15 @@ describe("createPersonaBot", () => {
     };
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
-      rateLimiter,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
+      rateLimiter,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(result.kind).toBe("skipped");
@@ -238,20 +243,20 @@ describe("createPersonaBot", () => {
     const mocks = createMocks();
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     await bot.handle({
-      id: "msg1",
       chatId: "group1",
-      text: "hello",
+      id: "msg1",
       isGroup: true,
       senderName: "Alice",
+      text: "hello",
     });
     expect(mocks.generator.generate).toHaveBeenCalled();
-    const callArgs = mocks.generator.generate.mock.calls[0];
+    const [callArgs] = mocks.generator.generate.mock.calls;
     expect(callArgs?.[1]?.[0]?.content).toBe("Alice: hello");
   });
 
@@ -262,22 +267,22 @@ describe("createPersonaBot", () => {
     };
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       describer,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     await bot.handle({
-      id: "msg1",
       chatId: "chat1",
-      text: "look",
+      id: "msg1",
       media: [
-        { kind: "image", data: new Uint8Array([1, 2]), mime: "image/png" },
+        { data: new Uint8Array([1, 2]), kind: "image", mime: "image/png" },
       ],
+      text: "look",
     });
     expect(describer.describe).toHaveBeenCalled();
-    const callArgs = mocks.generator.generate.mock.calls[0];
+    const [callArgs] = mocks.generator.generate.mock.calls;
     expect(callArgs?.[1]?.[0]?.content).toContain("[image: a cat photo]");
   });
 
@@ -288,21 +293,21 @@ describe("createPersonaBot", () => {
     };
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       describer,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     await bot.handle({
-      id: "msg1",
       chatId: "chat1",
-      text: "look",
+      id: "msg1",
       media: [
-        { kind: "image", data: new Uint8Array([1, 2]), mime: "image/png" },
+        { data: new Uint8Array([1, 2]), kind: "image", mime: "image/png" },
       ],
+      text: "look",
     });
-    const callArgs = mocks.generator.generate.mock.calls[0];
+    const [callArgs] = mocks.generator.generate.mock.calls;
     expect(callArgs?.[1]?.[0]?.content).toContain("[image: unavailable]");
   });
 
@@ -311,14 +316,14 @@ describe("createPersonaBot", () => {
     mocks.generator.generate.mockRejectedValue(new Error("api error"));
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(result.kind).toBe("failed");
@@ -329,14 +334,14 @@ describe("createPersonaBot", () => {
     mocks.generator.generate.mockResolvedValue("   ");
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(result.kind).toBe("skipped");
@@ -348,14 +353,14 @@ describe("createPersonaBot", () => {
     mocks.channel.send.mockRejectedValue(new Error("send failed"));
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     const result = await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(result.kind).toBe("failed");
@@ -364,25 +369,25 @@ describe("createPersonaBot", () => {
   it("loads history and appends turns", async () => {
     const mocks = createMocks();
     mocks.history.load.mockResolvedValue([
-      { role: "user", content: "previous" },
-      { role: "assistant", content: "response" },
+      { content: "previous", role: "user" },
+      { content: "response", role: "assistant" },
     ]);
     const bot = createPersonaBot({
       channel: mocks.channel,
-      history: mocks.history,
       generator: mocks.generator,
-      policy: mocks.policy,
+      history: mocks.history,
       logger: mocks.logger,
+      policy: mocks.policy,
     });
     await bot.handle({
-      id: "msg1",
       chatId: "chat1",
+      id: "msg1",
       text: "hello",
     });
     expect(mocks.history.load).toHaveBeenCalledWith("chat1");
     expect(mocks.history.append).toHaveBeenCalledWith("chat1", [
-      { role: "user", content: "hello" },
-      { role: "assistant", content: "Hello!" },
+      { content: "hello", role: "user" },
+      { content: "Hello!", role: "assistant" },
     ]);
   });
 });

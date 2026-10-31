@@ -7,8 +7,13 @@ describe("feedback commands", () => {
     const commands = createCommands({
       adminNumbers: ["5511"],
       botName: "Ana",
-      state: { paused: false, setPaused() {} },
       onRate,
+      state: {
+        paused: false,
+        setPaused() {
+          /* intentionally empty */
+        },
+      },
     });
     const r = await commands.handle("!good", "5511@s.whatsapp.net", {
       chatId: "c1",
@@ -23,8 +28,13 @@ describe("feedback commands", () => {
     const commands = createCommands({
       adminNumbers: ["5511"],
       botName: "Ana",
-      state: { paused: false, setPaused() {} },
       onRate,
+      state: {
+        paused: false,
+        setPaused() {
+          /* intentionally empty */
+        },
+      },
     });
     const r = await commands.handle("!bad too long", "5511@s.whatsapp.net", {
       chatId: "c1",
@@ -37,8 +47,13 @@ describe("feedback commands", () => {
     const commands = createCommands({
       adminNumbers: ["5511"],
       botName: "Ana",
-      state: { paused: false, setPaused() {} },
       onWeights: () => "weights: maxWords=15",
+      state: {
+        paused: false,
+        setPaused() {
+          /* intentionally empty */
+        },
+      },
     });
     const r = await commands.handle("!weights", "5511@s.whatsapp.net");
     expect(r.reply).toBe("weights: maxWords=15");
@@ -49,8 +64,13 @@ describe("feedback commands", () => {
     const commands = createCommands({
       adminNumbers: ["5511"],
       botName: "Ana",
-      state: { paused: false, setPaused() {} },
       onRate,
+      state: {
+        paused: false,
+        setPaused() {
+          /* intentionally empty */
+        },
+      },
     });
     const r = await commands.handle("!good", "5599@s.whatsapp.net");
     expect(r.handled).toBe(false);

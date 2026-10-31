@@ -5,44 +5,55 @@ import { describe, expect, it } from "vitest";
 import { createPersona } from "../src/index";
 
 const persona = parsePersona({
-  version: 1,
-  name: "Ana",
-  styleGuide: "short",
-  stats: { medianLen: 5, p90Len: 9 },
-  quotes: [],
-  phrases: [],
   facts: [],
+  name: "Ana",
+  phrases: [],
+  quotes: [],
+  stats: { medianLen: 5, p90Len: 9 },
+  styleGuide: "short",
+  version: 1,
 });
-const silent = { info() {}, warn() {}, error() {} };
+const silent = {
+  error() {
+    /* intentionally empty */
+  },
+  info() {
+    /* intentionally empty */
+  },
+  warn() {
+    /* intentionally empty */
+  },
+};
 
 function setup(generate: (s: string, m: Turn[]) => string = () => "ok") {
   const sent: string[] = [];
   const calls: { system: string; messages: Turn[] }[] = [];
   const channel: Channel = {
     name: "t",
-    async send(_chatId, text) {
+    send(_chatId, text) {
       sent.push(text);
+      return Promise.resolve();
     },
   };
   const generator = {
-    async generate(system: string, messages: Turn[]) {
-      calls.push({ system, messages });
-      return generate(system, messages);
+    generate(system: string, messages: Turn[]) {
+      calls.push({ messages, system });
+      return Promise.resolve(generate(system, messages));
     },
   };
-  return { sent, calls, channel, generator };
+  return { calls, channel, generator, sent };
 }
 
 describe("persona pipeline behaviour", () => {
   it("lets an admin in a group pause and resume, even while paused", async () => {
     const { channel, generator, sent } = setup();
     const bot = createPersona({
-      persona,
+      admins: ["5511"],
       channel,
       generator,
-      admins: ["5511"],
-      policy: { direct: "always", group: "always" },
       logger: silent,
+      persona,
+      policy: { direct: "always", group: "always" },
     });
     const base = { chatId: "g1", isGroup: true, senderName: "x", text: "" };
     expect(
@@ -51,7 +62,7 @@ describe("persona pipeline behaviour", () => {
         ...base,
         senderId: "5511@s.whatsapp.net",
         text: "!pause",
-      }),
+      })
     ).toEqual({
       kind: "command",
     });
@@ -65,7 +76,7 @@ describe("persona pipeline behaviour", () => {
         ...base,
         senderId: "5511@s.whatsapp.net",
         text: "!resume",
-      }),
+      })
     ).toEqual({
       kind: "command",
     });
@@ -76,16 +87,16 @@ describe("persona pipeline behaviour", () => {
   it("ignores admin commands from a group member who is not an admin", async () => {
     const { channel, generator } = setup();
     const bot = createPersona({
-      persona,
+      admins: ["5511"],
       channel,
       generator,
-      admins: ["5511"],
-      policy: { direct: "always", group: "always" },
       logger: silent,
+      persona,
+      policy: { direct: "always", group: "always" },
     });
     const r = await bot.handle({
-      id: "1",
       chatId: "g1",
+      id: "1",
       isGroup: true,
       senderId: "5599@s.whatsapp.net",
       text: "!pause",
@@ -98,20 +109,20 @@ describe("persona pipeline behaviour", () => {
     const { channel, generator, calls } = setup();
     const memory = createMemory();
     await memory.history.append("c1", [
-      { role: "user", content: "remember the blue umbrella" },
+      { content: "remember the blue umbrella", role: "user" },
     ]);
     const bot = createPersona({
-      persona,
       channel,
       generator,
-      memory,
-      recallLimit: 3,
-      policy: { direct: "always" },
       logger: silent,
+      memory,
+      persona,
+      policy: { direct: "always" },
+      recallLimit: 3,
     });
     await bot.handle({
-      id: "1",
       chatId: "c1",
+      id: "1",
       text: "where is the blue umbrella?",
     });
     expect(calls[0]?.system).toContain("Earlier in this chat:");
@@ -121,13 +132,13 @@ describe("persona pipeline behaviour", () => {
   it("keeps the persona system prompt on every model call", async () => {
     const { channel, generator, calls } = setup();
     const bot = createPersona({
-      persona,
       channel,
       generator,
-      policy: { direct: "always" },
       logger: silent,
+      persona,
+      policy: { direct: "always" },
     });
-    await bot.handle({ id: "1", chatId: "c1", text: "hello" });
+    await bot.handle({ chatId: "c1", id: "1", text: "hello" });
     expect(calls[0]?.system).toBe(bot.systemPrompt);
     expect(calls[0]?.system).toContain("You are Ana.");
   });

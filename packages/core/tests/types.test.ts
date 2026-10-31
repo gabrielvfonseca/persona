@@ -15,20 +15,20 @@ import type {
 
 describe("types", () => {
   it("defines Turn shape", () => {
-    const turn: Turn = { role: "user", content: "hello" };
+    const turn: Turn = { content: "hello", role: "user" };
     expect(turn.role).toBe("user");
     expect(turn.content).toBe("hello");
   });
 
   it("defines assistant turn", () => {
-    const turn: Turn = { role: "assistant", content: "hi" };
+    const turn: Turn = { content: "hi", role: "assistant" };
     expect(turn.role).toBe("assistant");
   });
 
   it("defines IncomingMessage with required fields", () => {
     const msg: IncomingMessage = {
-      id: "123",
       chatId: "chat1",
+      id: "123",
       text: "hello",
     };
     expect(msg.id).toBe("123");
@@ -38,13 +38,13 @@ describe("types", () => {
 
   it("defines IncomingMessage with optional fields", () => {
     const msg: IncomingMessage = {
-      id: "123",
       chatId: "chat1",
-      text: "hello",
-      senderName: "Alice",
+      id: "123",
       isGroup: true,
       mentionsBot: true,
       repliesToBot: false,
+      senderName: "Alice",
+      text: "hello",
     };
     expect(msg.senderName).toBe("Alice");
     expect(msg.isGroup).toBe(true);
@@ -53,12 +53,12 @@ describe("types", () => {
 
   it("defines IncomingMessage with media", () => {
     const msg: IncomingMessage = {
-      id: "123",
       chatId: "chat1",
-      text: "photo",
+      id: "123",
       media: [
-        { kind: "image", data: new Uint8Array([1, 2, 3]), mime: "image/png" },
+        { data: new Uint8Array([1, 2, 3]), kind: "image", mime: "image/png" },
       ],
+      text: "photo",
     };
     expect(msg.media?.[0]?.kind).toBe("image");
     expect(msg.media?.[0]?.mime).toBe("image/png");
@@ -66,12 +66,12 @@ describe("types", () => {
 
   it("defines sticker media", () => {
     const msg: IncomingMessage = {
-      id: "123",
       chatId: "chat1",
-      text: "",
+      id: "123",
       media: [
-        { kind: "sticker", data: new Uint8Array([]), mime: "image/webp" },
+        { data: new Uint8Array([]), kind: "sticker", mime: "image/webp" },
       ],
+      text: "",
     };
     expect(msg.media?.[0]?.kind).toBe("sticker");
   });
@@ -79,9 +79,10 @@ describe("types", () => {
   it("defines Channel interface", async () => {
     const channel: Channel = {
       name: "test",
-      send: async (chatId: string, text: string, replyTo?: string) => {
+      send: (chatId: string, text: string, _replyTo?: string) => {
         expect(chatId).toBe("chat1");
         expect(text).toBe("hi");
+        return Promise.resolve();
       },
     };
     await channel.send("chat1", "hi");
@@ -89,18 +90,25 @@ describe("types", () => {
 
   it("defines HistoryStore interface", async () => {
     const history: HistoryStore = {
-      load: async (chatId: string) => [{ role: "user", content: "hi" }],
-      append: async (chatId: string, turns: Turn[]) => {},
+      append: (_chatId: string, _turns: Turn[]) => {
+        /* intentionally empty */
+        return Promise.resolve();
+      },
+      load: (_chatId: string) =>
+        Promise.resolve([{ content: "hi", role: "user" }]),
     };
     const turns = await history.load("chat1");
     expect(turns.length).toBe(1);
-    await history.append("chat1", [{ role: "assistant", content: "hello" }]);
+    await history.append("chat1", [{ content: "hello", role: "assistant" }]);
   });
 
   it("defines DedupeStore interface", async () => {
     const dedupe: DedupeStore = {
-      has: async (key: string) => key === "seen",
-      set: async (key: string, ttlMs: number) => {},
+      has: (key: string) => Promise.resolve(key === "seen"),
+      set: (_key: string, _ttlMs: number) => {
+        /* intentionally empty */
+        return Promise.resolve();
+      },
     };
     expect(await dedupe.has("seen")).toBe(true);
     expect(await dedupe.has("new")).toBe(false);
@@ -109,8 +117,10 @@ describe("types", () => {
 
   it("defines RateLimiter interface", async () => {
     const limiter: RateLimiter = {
-      allow: async (key: string) => key !== "blocked",
-      reset: (key: string) => {},
+      allow: (key: string) => Promise.resolve(key !== "blocked"),
+      reset: (_key: string) => {
+        /* intentionally empty */
+      },
     };
     expect(await limiter.allow("ok")).toBe(true);
     expect(await limiter.allow("blocked")).toBe(false);
@@ -131,17 +141,19 @@ describe("types", () => {
 
   it("defines ReplyGenerator interface", async () => {
     const generator: ReplyGenerator = {
-      generate: async (system: string, messages: Turn[]) => "response",
+      generate: (_system: string, _messages: Turn[]) =>
+        Promise.resolve("response"),
     };
     const result = await generator.generate("", [
-      { role: "user", content: "hi" },
+      { content: "hi", role: "user" },
     ]);
     expect(result).toBe("response");
   });
 
   it("defines ImageDescriber interface", async () => {
     const describer: ImageDescriber = {
-      describe: async (data: Uint8Array, mime: string) => "a photo",
+      describe: (_data: Uint8Array, _mime: string) =>
+        Promise.resolve("a photo"),
     };
     const desc = await describer.describe(new Uint8Array([1]), "image/png");
     expect(desc).toBe("a photo");
@@ -150,9 +162,9 @@ describe("types", () => {
   it("defines Logger interface", () => {
     const logs: string[] = [];
     const logger: Logger = {
-      info: (...a: unknown[]) => logs.push("info"),
-      warn: (...a: unknown[]) => logs.push("warn"),
-      error: (...a: unknown[]) => logs.push("error"),
+      error: (..._a: unknown[]) => logs.push("error"),
+      info: (..._a: unknown[]) => logs.push("info"),
+      warn: (..._a: unknown[]) => logs.push("warn"),
     };
     logger.info("test");
     logger.warn("test");
@@ -165,11 +177,11 @@ describe("types", () => {
     const r2: HandleResult = { kind: "command" };
     const r3: HandleResult = { kind: "skipped", reason: "duplicate" };
     const r4: HandleResult = {
+      detail: "info",
       kind: "skipped",
       reason: "paused",
-      detail: "info",
     };
-    const r5: HandleResult = { kind: "failed", error: new Error("fail") };
+    const r5: HandleResult = { error: new Error("fail"), kind: "failed" };
     expect(r1.kind).toBe("replied");
     expect(r2.kind).toBe("command");
     expect(r3.kind).toBe("skipped");

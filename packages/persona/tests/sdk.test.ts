@@ -11,13 +11,13 @@ import { buildSystemPrompt } from "../src/prompt";
 describe("parsePersona", () => {
   it("parses v1 schema", () => {
     const p = parsePersona({
-      version: 1,
-      name: "Test",
-      styleGuide: "casual",
-      quotes: ["hi"],
-      phrases: ["bye"],
       facts: ["likes cats"],
+      name: "Test",
+      phrases: ["bye"],
+      quotes: ["hi"],
       stats: { medianLen: 10, p90Len: 20 },
+      styleGuide: "casual",
+      version: 1,
     });
     expect(p.name).toBe("Test");
   });
@@ -25,9 +25,9 @@ describe("parsePersona", () => {
     const p = parsePersona({
       profile: {
         name: "Legacy",
-        styleGuide: "legacy style",
         quotes: ["legacy quote"],
         stats: { medianLen: 5, p90Len: 10 },
+        styleGuide: "legacy style",
       },
     });
     expect(p.name).toBe("Legacy");
@@ -39,26 +39,26 @@ describe("parsePersona", () => {
 describe("buildSystemPrompt", () => {
   it("includes name and examples", () => {
     const prompt = buildSystemPrompt({
-      version: 1,
-      name: "TestBot",
-      styleGuide: "be brief",
-      quotes: ["hello there", "good morning"],
-      phrases: [],
       facts: [],
+      name: "TestBot",
+      phrases: [],
+      quotes: ["hello there", "good morning"],
       stats: { medianLen: 10, p90Len: 20 },
+      styleGuide: "be brief",
+      version: 1,
     });
     expect(prompt).toContain("TestBot");
     expect(prompt).toContain("be brief");
   });
   it("filters system lines", () => {
     const prompt = buildSystemPrompt({
-      version: 1,
-      name: "TestBot",
-      styleGuide: "x",
-      quotes: ["end-to-end encrypted message", "real quote"],
-      phrases: [],
       facts: [],
+      name: "TestBot",
+      phrases: [],
+      quotes: ["end-to-end encrypted message", "real quote"],
       stats: { medianLen: 10, p90Len: 20 },
+      styleGuide: "x",
+      version: 1,
     });
     expect(prompt).not.toContain("end-to-end");
     expect(prompt).toContain("real quote");
@@ -77,7 +77,7 @@ describe("guards", () => {
     expect(
       noEcho("this is a very long example text that exceeds twenty chars end", {
         examples: [longEx],
-      }),
+      })
     ).toBe(false);
     expect(noEcho("original reply", { examples: [longEx] })).toBe(true);
   });

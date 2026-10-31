@@ -4,30 +4,74 @@ import { describe, expect, it } from "vitest";
 import { createPersona } from "../src/create";
 
 const persona = parsePersona({
-  version: 1,
-  name: "Ana",
-  styleGuide: "calm",
-  stats: { medianLen: 1, p90Len: 1 },
-  quotes: [],
-  phrases: [],
   facts: [],
+  name: "Ana",
+  phrases: [],
+  quotes: [],
+  stats: { medianLen: 1, p90Len: 1 },
+  styleGuide: "calm",
+  version: 1,
 });
 
-const channel = { name: "t", send: async () => {} };
-const generator: ReplyGenerator = { generate: async () => "ok" };
+const channel = {
+  name: "t",
+  send: () => {
+    /* intentionally empty */
+    return Promise.resolve();
+  },
+};
+const generator: ReplyGenerator = { generate: () => Promise.resolve("ok") };
 
-// Known bug: createPersona always passes its own `weights` object to buildSystemPrompt,
-// so the `prompt.maxWords` option is ignored. It.fails keeps the suite green while the
-// bug exists and turns red once it is fixed, so the marker can be removed.
-describe("known issue: prompt.maxWords is ignored by createPersona", () => {
-  it.fails("uses prompt.maxWords when given", () => {
+describe("createPersona prompt length", () => {
+  it("uses prompt.maxWords when no weights are given", () => {
     const bot = createPersona({
-      persona,
       channel,
       generator,
+      persona,
       prompt: { maxWords: 3 },
     });
 
     expect(bot.systemPrompt).toContain("Reply in at most 3 words.");
+  });
+
+  it("defaults to 15 words when neither is given", () => {
+    const bot = createPersona({ channel, generator, persona });
+
+    expect(bot.systemPrompt).toContain("Reply in at most 15 words.");
+  });
+
+  it("lets explicit weights win over prompt.maxWords", () => {
+    const bot = createPersona({
+      channel,
+      generator,
+      persona,
+      prompt: { maxWords: 3 },
+      weights: {
+        exampleBoost: 1,
+        extraRules: [],
+        maxWords: 7,
+        styleGuideStrength: 1,
+      },
+    });
+
+    expect(bot.systemPrompt).toContain("Reply in at most 7 words.");
+  });
+
+  it("keeps prompt.maxWords when weights are changed at runtime without maxWords", () => {
+    const bot = createPersona({
+      channel,
+      generator,
+      persona,
+      prompt: { maxWords: 3 },
+    });
+
+    bot.setPromptWeights({
+      exampleBoost: 1,
+      extraRules: [],
+      maxWords: 9,
+      styleGuideStrength: 1,
+    });
+
+    expect(bot.systemPrompt).toContain("Reply in at most 9 words.");
   });
 });

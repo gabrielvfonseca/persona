@@ -1,6 +1,7 @@
 export {
   type Command,
   type CommandHandler,
+  type CommandHooks,
   type CommandsOptions,
   createCommands,
 } from "./commands";

@@ -9,13 +9,13 @@ import { buildSystemPrompt } from "../src/prompt";
 
 describe("buildSystemPrompt", () => {
   const persona = {
-    version: 1 as const,
-    name: "TestBot",
-    styleGuide: "Be casual and friendly",
-    stats: { medianLen: 10, p90Len: 20 },
-    quotes: ["hello there", "how can I help?"],
-    phrases: ["lol", "brb"],
     facts: ["likes coffee"],
+    name: "TestBot",
+    phrases: ["lol", "brb"],
+    quotes: ["hello there", "how can I help?"],
+    stats: { medianLen: 10, p90Len: 20 },
+    styleGuide: "Be casual and friendly",
+    version: 1 as const,
   };
 
   it("builds basic prompt", () => {

@@ -5,43 +5,54 @@ import { describe, expect, it } from "vitest";
 import { createPersona } from "../src/index";
 
 const persona = parsePersona({
-  version: 1,
-  name: "Ana",
-  styleGuide: "short",
-  stats: { medianLen: 5, p90Len: 9 },
-  quotes: [],
-  phrases: [],
   facts: [],
+  name: "Ana",
+  phrases: [],
+  quotes: [],
+  stats: { medianLen: 5, p90Len: 9 },
+  styleGuide: "short",
+  version: 1,
 });
-const silent = { info() {}, warn() {}, error() {} };
+const silent = {
+  error() {
+    /* intentionally empty */
+  },
+  info() {
+    /* intentionally empty */
+  },
+  warn() {
+    /* intentionally empty */
+  },
+};
 
 function setup(generate: (s: string, m: Turn[]) => string = () => "ok") {
   const sent: string[] = [];
   const calls: { system: string; messages: Turn[] }[] = [];
   const channel: Channel = {
     name: "t",
-    async send(_chatId, text) {
+    send(_chatId, text) {
       sent.push(text);
+      return Promise.resolve();
     },
   };
   const generator = {
-    async generate(system: string, messages: Turn[]) {
-      calls.push({ system, messages });
-      return generate(system, messages);
+    generate(system: string, messages: Turn[]) {
+      calls.push({ messages, system });
+      return Promise.resolve(generate(system, messages));
     },
   };
-  return { sent, calls, channel, generator };
+  return { calls, channel, generator, sent };
 }
 
 describe("persona learning wiring", () => {
-  it("applies a persona patch and rebuilds the system prompt", async () => {
+  it("applies a persona patch and rebuilds the system prompt", () => {
     const { channel, generator } = setup();
     const bot = createPersona({
-      persona,
       channel,
       generator,
-      policy: { direct: "always" },
       logger: silent,
+      persona,
+      policy: { direct: "always" },
     });
     const before = bot.systemPrompt;
     bot.applyPatch({
@@ -53,58 +64,61 @@ describe("persona learning wiring", () => {
     expect(bot.systemPrompt).toContain("Loves coffee");
     expect(bot.systemPrompt).toContain("No worries");
     expect(bot.systemPrompt).toContain("Be warm.");
+    return Promise.resolve();
   });
 
-  it("setPromptWeights rebuilds the system prompt", async () => {
+  it("setPromptWeights rebuilds the system prompt", () => {
     const { channel, generator } = setup();
     const bot = createPersona({
-      persona,
       channel,
       generator,
-      policy: { direct: "always" },
       logger: silent,
+      persona,
+      policy: { direct: "always" },
     });
     const before = bot.systemPrompt;
     bot.setPromptWeights({
-      maxWords: 5,
       exampleBoost: 1,
-      styleGuideStrength: 1,
       extraRules: [],
+      maxWords: 5,
+      styleGuideStrength: 1,
     });
     expect(bot.systemPrompt).toContain("Reply in at most 5 words.");
     expect(bot.systemPrompt).not.toBe(before);
+    return Promise.resolve();
   });
 
-  it("setRecallWeights updates the memory fusion weights", async () => {
+  it("setRecallWeights updates the memory fusion weights", () => {
     const { channel, generator } = setup();
     const memory = createMemory();
     const bot = createPersona({
-      persona,
       channel,
       generator,
-      memory,
-      policy: { direct: "always" },
       logger: silent,
+      memory,
+      persona,
+      policy: { direct: "always" },
     });
-    bot.setRecallWeights({ keywordWeight: 2, semanticWeight: 0.5, rrfK: 60 });
+    bot.setRecallWeights({ keywordWeight: 2, rrfK: 60, semanticWeight: 0.5 });
     // No throw; weights are stored on the memory object.
     expect(bot.memory).toBeDefined();
+    return Promise.resolve();
   });
 
   it("records outcomes through a learning observer", async () => {
     const { channel, generator } = setup();
     const outcomes: { kind: string }[] = [];
     const bot = createPersona({
-      persona,
       channel,
       generator,
-      policy: { direct: "always" },
-      logger: silent,
       learning: {
         recordOutcome: (o) => outcomes.push({ kind: o.result.kind }),
       },
+      logger: silent,
+      persona,
+      policy: { direct: "always" },
     });
-    await bot.handle({ id: "1", chatId: "c1", text: "hello" });
+    await bot.handle({ chatId: "c1", id: "1", text: "hello" });
     expect(outcomes.some((o) => o.kind === "replied")).toBe(true);
   });
 });

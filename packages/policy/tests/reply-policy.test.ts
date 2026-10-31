@@ -36,10 +36,10 @@ describe("createReplyPolicy", () => {
   it("defaults to addressed for direct messages", () => {
     const policy = createReplyPolicy();
     const result = policy.shouldReply({
-      isGroup: false,
       chatId: "chat1",
-      text: "hello",
+      isGroup: false,
       mentioned: false,
+      text: "hello",
     });
     expect(result).toBe("never");
   });
@@ -47,10 +47,10 @@ describe("createReplyPolicy", () => {
   it("replies when mentioned in direct message with addressed policy", () => {
     const policy = createReplyPolicy();
     const result = policy.shouldReply({
-      isGroup: false,
       chatId: "chat1",
-      text: "hello bot",
+      isGroup: false,
       mentioned: true,
+      text: "hello bot",
     });
     expect(result).toBe("always");
   });
@@ -58,10 +58,10 @@ describe("createReplyPolicy", () => {
   it("replies when name mentioned", () => {
     const policy = createReplyPolicy({ names: ["Bot"] });
     const result = policy.shouldReply({
-      isGroup: false,
       chatId: "chat1",
-      text: "hey Bot",
+      isGroup: false,
       mentioned: false,
+      text: "hey Bot",
     });
     expect(result).toBe("always");
   });
@@ -69,10 +69,10 @@ describe("createReplyPolicy", () => {
   it("direct always mode replies to everything", () => {
     const policy = createReplyPolicy({ direct: "always" });
     const result = policy.shouldReply({
-      isGroup: false,
       chatId: "chat1",
-      text: "hello",
+      isGroup: false,
       mentioned: false,
+      text: "hello",
     });
     expect(result).toBe("always");
   });
@@ -80,10 +80,10 @@ describe("createReplyPolicy", () => {
   it("direct never mode without mention and no probability", () => {
     const policy = createReplyPolicy({ direct: "never" });
     const result = policy.shouldReply({
-      isGroup: false,
       chatId: "chat1",
-      text: "hello",
+      isGroup: false,
       mentioned: false,
+      text: "hello",
     });
     expect(result).toBe("never");
   });
@@ -91,10 +91,10 @@ describe("createReplyPolicy", () => {
   it("direct never mode with mention replies always", () => {
     const policy = createReplyPolicy({ direct: "never" });
     const result = policy.shouldReply({
-      isGroup: false,
       chatId: "chat1",
-      text: "bot",
+      isGroup: false,
       mentioned: true,
+      text: "bot",
     });
     expect(result).toBe("always");
   });
@@ -102,10 +102,10 @@ describe("createReplyPolicy", () => {
   it("group defaults to addressed", () => {
     const policy = createReplyPolicy();
     const result = policy.shouldReply({
-      isGroup: true,
       chatId: "group1",
-      text: "hello",
+      isGroup: true,
       mentioned: false,
+      text: "hello",
     });
     expect(result).toBe("never");
   });
@@ -113,10 +113,10 @@ describe("createReplyPolicy", () => {
   it("group replies when mentioned", () => {
     const policy = createReplyPolicy();
     const result = policy.shouldReply({
-      isGroup: true,
       chatId: "group1",
-      text: "hello bot",
+      isGroup: true,
       mentioned: true,
+      text: "hello bot",
     });
     expect(result).toBe("always");
   });
@@ -124,30 +124,30 @@ describe("createReplyPolicy", () => {
   it("group always mode", () => {
     const policy = createReplyPolicy({ group: "always" });
     const result = policy.shouldReply({
-      isGroup: true,
       chatId: "group1",
-      text: "hello",
+      isGroup: true,
       mentioned: false,
+      text: "hello",
     });
     expect(result).toBe("always");
   });
 
   it("allowedGroups restricts groups", () => {
     const policy = createReplyPolicy({
-      group: "always",
       allowedGroups: ["group1"],
+      group: "always",
     });
     const result1 = policy.shouldReply({
-      isGroup: true,
       chatId: "group1",
-      text: "hello",
+      isGroup: true,
       mentioned: false,
+      text: "hello",
     });
     const result2 = policy.shouldReply({
-      isGroup: true,
       chatId: "group2",
-      text: "hello",
+      isGroup: true,
       mentioned: false,
+      text: "hello",
     });
     expect(result1).toBe("always");
     expect(result2).toBe("never");
@@ -155,30 +155,30 @@ describe("createReplyPolicy", () => {
 
   it("allowedGroups is a hard deny, even when the bot is mentioned", () => {
     const policy = createReplyPolicy({
+      allowedGroups: ["group1"],
       group: "always",
       names: ["Ana"],
-      allowedGroups: ["group1"],
     });
     expect(
       policy.shouldReply({
-        isGroup: true,
         chatId: "group2",
-        text: "Ana, are you there?",
+        isGroup: true,
         mentioned: true,
-      }),
+        text: "Ana, are you there?",
+      })
     ).toBe("never");
   });
 
   it("allowedGroups with empty list allows all", () => {
     const policy = createReplyPolicy({
-      group: "always",
       allowedGroups: [],
+      group: "always",
     });
     const result = policy.shouldReply({
-      isGroup: true,
       chatId: "group2",
-      text: "hello",
+      isGroup: true,
       mentioned: false,
+      text: "hello",
     });
     expect(result).toBe("always");
   });
@@ -186,14 +186,14 @@ describe("createReplyPolicy", () => {
   it("unpromptedProbability triggers randomly", () => {
     const policy = createReplyPolicy({
       direct: "never",
-      unpromptedProbability: 1.0,
       random: () => 0.5,
+      unpromptedProbability: 1.0,
     });
     const result = policy.shouldReply({
-      isGroup: false,
       chatId: "chat1",
-      text: "hello",
+      isGroup: false,
       mentioned: false,
+      text: "hello",
     });
     expect(result).toBe("always");
   });
@@ -201,25 +201,25 @@ describe("createReplyPolicy", () => {
   it("unpromptedProbability does not trigger when random too high", () => {
     const policy = createReplyPolicy({
       direct: "never",
-      unpromptedProbability: 0.5,
       random: () => 0.8,
+      unpromptedProbability: 0.5,
     });
     const result = policy.shouldReply({
-      isGroup: false,
       chatId: "chat1",
-      text: "hello",
+      isGroup: false,
       mentioned: false,
+      text: "hello",
     });
     expect(result).toBe("never");
   });
 
   it("mentioned takes precedence", () => {
-    const policy = createReplyPolicy({ names: ["Bot"], group: "never" });
+    const policy = createReplyPolicy({ group: "never", names: ["Bot"] });
     const result = policy.shouldReply({
-      isGroup: true,
       chatId: "group1",
-      text: "@Bot hello",
+      isGroup: true,
       mentioned: false,
+      text: "@Bot hello",
     });
     expect(result).toBe("always");
   });
