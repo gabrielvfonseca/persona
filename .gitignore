@@ -12,5 +12,12 @@ data/.DS_Store
 .env*
 !.env.example
 
+# Trainning
+trainning/
+
 # Turbo
 .turbo
+
+# Local training tools (not part of the repo)
+examples/bot/.tools/
+examples/bot/.venv-train/

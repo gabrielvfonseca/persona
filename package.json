@@ -2,29 +2,38 @@
   "name": "@persona/root",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.3.14",
   "workspaces": [
     "packages/*",
     "examples/*"
   ],
   "scripts": {
-    "dev": "turbo run dev --parallel",
     "build": "turbo run build",
-    "test": "turbo run test && vitest run",
-    "typecheck": "turbo run typecheck && tsc -p scripts/tsconfig.json && tsc -p tests/tsconfig.json",
     "check": "turbo run check",
-    "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "prepare": "husky"
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "prepare": "husky",
+    "test": "turbo run test && vitest run",
+    "typecheck": "turbo run typecheck && tsc -p scripts/tsconfig.json && tsc -p tests/tsconfig.json"
   },
   "devDependencies": {
+    "@persona/core": "workspace:*",
+    "@persona/learning": "workspace:*",
+    "@persona/memory": "workspace:*",
+    "@persona/persona": "workspace:*",
+    "@persona/policy": "workspace:*",
+    "@persona/postgres": "workspace:*",
+    "@persona/schemas": "workspace:*",
+    "@persona/whatsapp": "workspace:*",
     "bun-types": "^1.2.4",
     "changesets": "^1.0.2",
     "husky": "^9.1.7",
     "turbo": "^2.4.4",
     "typescript": "^7.0.2",
+    "ultracite": "^8.1.0",
     "vitest": "^5.0.5"
   },
+  "packageManager": "bun@1.3.14",
   "engines": {
     "bun": ">=1.1.0"
   }

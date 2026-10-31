@@ -1,0 +1,28 @@
+{
+  "name": "@persona/postgres",
+  "version": "0.1.0",
+  "description": "Postgres (pgvector) storage for the persona bot: KV state and memory nodes with graph edges",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "check": "biome check",
+    "lint": "biome check",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@persona/core": "workspace:*",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.15.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

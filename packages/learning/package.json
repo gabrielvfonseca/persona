@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "description": "Continuous learning: outcomes, feedback, weight tuning, persona patches, fine-tune dataset",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "scripts": {
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
     "check": "biome check",
-    "lint": "biome check"
+    "lint": "biome check",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@persona/core": "workspace:*",
