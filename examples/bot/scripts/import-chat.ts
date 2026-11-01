@@ -227,17 +227,31 @@ console.log(`nodes: ${existing.size} already stored, ${missing.length} to add`);
  * Embeds a batch. If the model rejects one text as too long, that text is retried
  * alone with a shorter prefix, so one unusual message cannot stop the import.
  */
+/** The model's own message for a text it cannot take, as opposed to any other failure. */
+const CONTEXT_OVERFLOW = /CONTEXT_OVERFLOW|context holds/u;
+
 async function embedBatch(batch: readonly Item[]): Promise<number[][]> {
   try {
-    return await embedder.embed(batch.map((item) => item.text.slice(0, EMBED_CHARS)));
+    return await embedder.embed(
+      batch.map((item) => item.text.slice(0, EMBED_CHARS))
+    );
   } catch (err) {
-    if (!(err instanceof Error) || !/CONTEXT_OVERFLOW|context holds/u.test(`${err.message} ${String((err as { code?: unknown }).code)}`)) {
+    const { code } = err as { code?: unknown };
+    const overflow =
+      err instanceof Error &&
+      (CONTEXT_OVERFLOW.test(err.message) ||
+        CONTEXT_OVERFLOW.test(String(code)));
+    if (!overflow) {
       throw err;
     }
     const out: number[][] = [];
     for (const item of batch) {
-      const [vector] = await embedder.embed([item.text.slice(0, FALLBACK_EMBED_CHARS)]);
-      out.push(vector ?? []);
+      // Each message gets its own call so the fallback is per message, not per batch.
+      // biome-ignore lint/performance/noAwaitInLoops: one message at a time, so a single long one only shortens itself
+      const [vector = []] = await embedder.embed([
+        item.text.slice(0, FALLBACK_EMBED_CHARS),
+      ]);
+      out.push(vector);
     }
     return out;
   }

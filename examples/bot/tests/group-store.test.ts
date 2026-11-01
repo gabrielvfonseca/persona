@@ -68,7 +68,8 @@ describe("group ids", () => {
   });
 });
 
-const url = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
+// Only TEST_DATABASE_URL: the tests TRUNCATE tables, so they must never fall back to the app database.
+const url = process.env.TEST_DATABASE_URL ?? "";
 
 describe.skipIf(!url)("pgGroupStore (Postgres)", () => {
   let pool: Pool;

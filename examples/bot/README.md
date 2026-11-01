@@ -121,12 +121,18 @@ the default cap is 50,000). Otherwise the bot evicts the oldest history on its f
 
 ```bash
 bun run train -- --dry-run     # builds the dataset and prints the commands
-bun run train                  # LoRA on Qwen2.5-0.5B, then fuse, convert, promote if it beats the base
+# What was used for Calhau: the 1.5B base, one example per step (the Metal GPU
+# rejected larger batches), 300 iterations, and the loss on the replies only.
+bun run train -- --model qwen2.5-1.5b --batch-size 1 --iters 300
 ```
 
 Training needs Apple Silicon, the Python packages in `.venv-train`, and `.tools/llama.cpp`
-(see "Train the model" above). A promoted model is used on the next start, unless
-`PERSONA_MODEL` is set.
+(see "Train the model" above). The promotion check compares validation losses, so it only
+decides between runs with the same objective. The Calhau model was therefore selected by
+reading its replies, then set explicitly with `PERSONA_MODEL=data/calhau/training/persona-q8_0.gguf`.
+
+The 0.5B base was tried first. It learned the register but collapsed into repeating a few
+phrases, so it was not used. The 1.5B base is the one in use.
 
 ### 4. Run
 

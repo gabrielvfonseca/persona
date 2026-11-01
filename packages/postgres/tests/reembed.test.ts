@@ -14,9 +14,11 @@ import { freshPool, TEST_DATABASE_URL } from "./helpers";
 function constantEmbedder(value: number): Embedder & { calls: number } {
   const e = {
     calls: 0,
-    async embed(texts: readonly string[]) {
+    embed(texts: readonly string[]) {
       e.calls += texts.length;
-      return texts.map(() => new Array<number>(384).fill(value));
+      return Promise.resolve(
+        texts.map(() => new Array<number>(384).fill(value))
+      );
     },
   };
   return e;
@@ -39,7 +41,11 @@ describe.skipIf(!TEST_DATABASE_URL)("re-embedding", () => {
     nodes = new PgNodeStore(pool, {
       now: (() => {
         let t = 1;
-        return () => t++;
+        return () => {
+          const v = t;
+          t += 1;
+          return v;
+        };
       })(),
     });
     kv = new PgKVStorage(pool);
@@ -51,6 +57,7 @@ describe.skipIf(!TEST_DATABASE_URL)("re-embedding", () => {
 
   it("replaces every node's embedding in order, across batches", async () => {
     for (const text of ["a", "b", "c", "d", "e"]) {
+      // biome-ignore lint/performance/noAwaitInLoops: inserts run in order so ids and timestamps are predictable
       await nodes.add({
         chatId: "c1",
         embedding: new Array(384).fill(0),

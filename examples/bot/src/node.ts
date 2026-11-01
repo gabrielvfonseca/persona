@@ -97,6 +97,7 @@ async function main(): Promise<void> {
   const model = createLocalModel({
     contextSize: config.MODEL_CONTEXT,
     model: modelValue,
+    temperature: config.MODEL_TEMPERATURE,
   });
   console.log(`[model] ${modelValue}`);
   const pg = await openPostgres(config.DATABASE_URL, config);
@@ -135,7 +136,12 @@ async function main(): Promise<void> {
   const handler: MessageHandler = {
     async handle(msg) {
       await pg.memory.state.refresh();
-      return bot.handle(msg);
+      const result = await bot.handle(msg);
+      // Outcome only, never the text: chats are private.
+      console.log(
+        `[handle] ${result.kind}${"reason" in result ? ` (${result.reason})` : ""}`
+      );
+      return result;
     },
   };
 

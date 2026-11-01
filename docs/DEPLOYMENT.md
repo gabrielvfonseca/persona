@@ -40,6 +40,7 @@ startup and lists every problem at once.
 | `PERSONA_CONSENT` | Required | Must be exactly `true`; you have the subject's consent |
 | `PERSONA_NAME` | Required | Display name; also matched when someone names the bot |
 | `PERSONA_MODEL` | — | Registry id (`qwen2.5-0.5b`, `qwen2.5-1.5b`, `smollm2-360m`) or a `.gguf` path. Unset: the active fine-tuned model, else `qwen2.5-0.5b` |
+| `MODEL_TEMPERATURE` | `0.2` | Sampling temperature for the local model (0–2). 0.5 to 0.8 suits a persona; low values repeat themselves |
 | `MODEL_CONTEXT` | `4096` | Context window for the local model, in tokens (512–32768) |
 | `MEMORY_MAX_NODES` | `50000` | Most memory nodes kept searchable; oldest are evicted |
 | `API_PORT` | — | Serve the ingest API on this port. Unset: no API |
@@ -48,6 +49,7 @@ startup and lists every problem at once.
 | `ADMIN_NUMBERS` | — | Comma-separated phone numbers allowed to run `!pause`, `!resume` and the other admin commands |
 | `MAX_PER_10MIN` | `5` | Replies per chat per 10 minutes (1–100) |
 | `RECALL_LIMIT` | `4` | Past messages added to each prompt. `0` turns recall off |
+| `PROMPT_EXCHANGES` | `40` | Real exchanges from the chat shown to the model as examples in each prompt |
 | `DATABASE_URL` | Required | Postgres connection string (pgvector). Holds history, dedupe, rate limits, pause state, learning and memory |
 | `EMBEDDING_MODEL` | `bge-small-en-v1.5` | ggml-node embedding model, run in-process. Downloaded on first use (about 37 MB) and cached. Must produce 384-dimension vectors |
 | `AUTH_DIR` | `.auth` | WhatsApp session credentials. Keep on a volume, out of git |

@@ -9,7 +9,7 @@
  * llama.cpp checkout for the GGUF converter. The result is promoted only if it
  * beats the base model and the model currently in use.
  */
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { activeModelFile } from "../src/active-model";
 import { pathsFromEnv } from "../src/config";
 import { loadPersona } from "../src/persona-file";
@@ -34,12 +34,13 @@ const result = await runTraining(
   {
     activeFile: activeModelFile(paths.personaFile),
     baseRepo: trainingBaseFor(model),
+    batchSize: Number(flagValue(args, "--batch-size") ?? 2),
     dryRun: args.includes("--dry-run"),
     iters: Number(flagValue(args, "--iters") ?? 300),
     llamaCppDir: flagValue(args, "--llama-cpp") ?? ".tools/llama.cpp",
     log: (line) => console.log(`[train] ${line}`),
     persona: loadPersona(paths.personaFile),
-    python: flagValue(args, "--python") ?? ".venv-train/bin/python",
+    python: resolve(flagValue(args, "--python") ?? ".venv-train/bin/python"),
     workDir: trainDir,
   },
   processRunner({ echo: true })

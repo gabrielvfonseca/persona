@@ -213,3 +213,11 @@ describe("model selection", () => {
     });
   });
 });
+
+describe("parseValLosses", () => {
+  it("reads validation losses from coloured mlx-lm output", () => {
+    const esc = String.fromCharCode(27);
+    const output = `  ${esc}[38;5;244m 1${esc}[0m    ${esc}[1;35mval${esc}[0m ${esc}[1m4.633${esc}[0m\n  ${esc}[38;5;244m 60${esc}[0m    ${esc}[1;35mval${esc}[0m ${esc}[1m0.225${esc}[0m\n`;
+    expect(parseValLosses(output)).toEqual([4.633, 0.225]);
+  });
+});

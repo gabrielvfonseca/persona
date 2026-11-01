@@ -31,6 +31,7 @@ export async function reembedNodes(
   let afterCreated = -1;
   let afterId = "";
   for (;;) {
+    // biome-ignore lint/performance/noAwaitInLoops: each page starts after the id of the previous one
     const { rows } = await pool.query<{
       id: string;
       text: string;

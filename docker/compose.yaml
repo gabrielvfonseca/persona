@@ -1,19 +1,20 @@
-# Docker Compose for the linked-device bot.
-# Copy examples/bot/.env.example to examples/bot/.env first and set DATABASE_URL there.
-# DATABASE_URL points at Supabase by default. To run the bot against a local
-# Postgres instead, start the `local-db` profile and set DATABASE_URL to
-# postgres://persona:persona@postgres:5432/persona in .env.
+# Docker Compose for the Calhau bot and its Postgres database, all on this machine.
+# Setup: copy examples/bot/.env.example to examples/bot/.env and fill it in.
+# The bot reads DATABASE_URL from that file for host scripts (import, tests). The
+# container gets the in-network address below, which overrides the env file.
 # The project name keeps this stack's volumes apart from other compose projects on the same engine.
 name: persona
 
 services:
   postgres:
-    profiles: [ "local-db" ]
     image: pgvector/pgvector:pg15
     environment:
       POSTGRES_DB: persona
       POSTGRES_USER: persona
       POSTGRES_PASSWORD: persona
+    ports:
+      # Published on localhost only, for host-side scripts such as the import.
+      - "127.0.0.1:5439:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,11 +30,16 @@ services:
       dockerfile: examples/bot/Dockerfile
     env_file:
       - ../examples/bot/.env
+    environment:
+      DATABASE_URL: postgres://persona:persona@postgres:5432/persona
     volumes:
       - ../examples/bot/.auth:/app/examples/bot/.auth
       - ../examples/bot/data:/app/examples/bot/data
       # Downloaded models (embedding and chat), so they are fetched once, not on every container start.
       - ggml_cache:/home/bun/.cache/ggml-node
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

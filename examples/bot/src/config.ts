@@ -35,6 +35,8 @@ const baseFields = {
     .default(50_000),
   /** Context window for the local model, in tokens. */
   MODEL_CONTEXT: z.coerce.number().int().min(512).max(32_768).default(4096),
+  /** Sampling temperature for the local model. Low values repeat themselves; 0.5 to 0.8 suits a persona. */
+  MODEL_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
   PERSONA_CONSENT: z
     .string()
     .refine((v) => v === "true", { message: 'PERSONA_CONSENT must be "true"' }),
@@ -43,6 +45,7 @@ const baseFields = {
   PERSONA_MODEL: z.string().optional(),
   PERSONA_NAME: z.string().min(1),
   /** Past messages added to each prompt. 0 turns recall off. */
+  PROMPT_EXCHANGES: z.coerce.number().int().min(0).max(200).default(40),
   RECALL_LIMIT: z.coerce.number().int().min(0).max(20).default(4),
 };
 

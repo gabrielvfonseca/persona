@@ -1,8 +1,8 @@
 import { createPool, migrate, type Pool } from "../src/db";
 
 /** Connection string for the test database, or undefined to skip database tests. */
-export const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+const { TEST_DATABASE_URL: testUrl } = process.env;
+export const TEST_DATABASE_URL = testUrl;
 
 /** A migrated pool with every table emptied. Call from `beforeEach`. */
 export async function freshPool(url: string): Promise<Pool> {

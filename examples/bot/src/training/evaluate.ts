@@ -1,8 +1,11 @@
 const PATTERN_1 =
   /\bval\s+(?<g1>\d+(?:\.\d+)?)/u; /** Validation losses mlx-lm printed, in order. Lines look like "iter 10: val 2.345 ...". */
+/** Terminal colour codes, which mlx-lm writes around its labels. */
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "gu");
+
 export function parseValLosses(output: string): number[] {
   const losses: number[] = [];
-  for (const line of output.split("\n")) {
+  for (const line of output.replace(ANSI, "").split("\n")) {
     const m = line.match(PATTERN_1);
     if (m?.[1]) {
       losses.push(Number(m[1]));

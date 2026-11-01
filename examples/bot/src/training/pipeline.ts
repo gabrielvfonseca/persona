@@ -106,6 +106,8 @@ export async function runTraining(
         String(Math.max(10, Math.floor(iters / 10))),
         "--val-batches",
         "4",
+        // Learn the replies, not the system prompt they are shown under.
+        "--mask-prompt",
         "--adapter-path",
         adapterDir,
       ],

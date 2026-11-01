@@ -16,6 +16,7 @@ import {
   type DatasetSink,
   memoryLearningStore,
 } from "./learning";
+import { noBrazilian, noExplicit, noRunaway } from "./safety";
 
 export interface BuildBotOptions {
   channel: Channel;
@@ -77,6 +78,7 @@ export async function buildBot(
     commands: wiring?.commands,
     contextWeights: wiring?.contextWeights,
     generator: opts.generator,
+    guards: [noExplicit, noRunaway, noBrazilian],
     learning: wiring ? fanOut(wiring.observer, opts.learning) : opts.learning,
     logger: opts.logger,
     memory:
@@ -92,6 +94,14 @@ export async function buildBot(
       // The linked device answers every direct chat.
       direct: "always",
       group: "addressed",
+    },
+    prompt: {
+      extraRules: [
+        "Answer what was actually asked, with real words. Do not reply with laughter alone.",
+        "Write in European Portuguese: tu and estás, never você, vc, pra, tmb or bora.",
+      ],
+      maxExchangeChars: 90,
+      maxExchanges: config.PROMPT_EXCHANGES,
     },
     recallLimit: config.RECALL_LIMIT,
     setPromptWeights: opts.setPromptWeights,
