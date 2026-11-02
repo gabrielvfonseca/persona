@@ -31,6 +31,12 @@ describe("noRunaway", () => {
     expect(noRunaway("nah nah nah nah bora", ctx)).toBe(false);
   });
 
+  it("drops laughter runs that alternate with emoji", () => {
+    expect(
+      noRunaway("Ahahahah 😂 Ahahahah 😂 Ahahahah 😂 Ahahahah 😂", ctx)
+    ).toBe(false);
+  });
+
   it("keeps normal replies", () => {
     expect(noRunaway("Ahahah, kkkk tudo bem", ctx)).toBe(true);
     expect(noRunaway("Bom dia, vamos ao bar hoje?", ctx)).toBe(true);

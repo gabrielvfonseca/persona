@@ -29,6 +29,14 @@ function loadRedactNames(personaPath: string): string[] {
     : [];
 }
 
+/** Facts the owner confirmed, kept in a git-ignored file next to the persona so an import cannot overwrite them. */
+function loadFacts(personaPath: string): string[] {
+  const file = join(dirname(personaPath), "facts.json");
+  return existsSync(file)
+    ? (JSON.parse(readFileSync(file, "utf8")) as string[])
+    : [];
+}
+
 /** The same redaction the persona examples get, for group messages used as recall. */
 export function redactorFor(personaPath: string): (text: string) => string {
   const names = loadRedactNames(personaPath);
@@ -100,5 +108,9 @@ export function loadPersona(path: string): Persona {
       { cause: err }
     );
   }
-  return curatePersona(redactPersona(parsePersona(raw), loadRedactNames(path)));
+  const persona = redactPersona(parsePersona(raw), loadRedactNames(path));
+  return curatePersona({
+    ...persona,
+    facts: [...persona.facts, ...loadFacts(path)],
+  });
 }

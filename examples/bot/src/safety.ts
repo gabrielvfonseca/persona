@@ -13,7 +13,11 @@ const BLOCKED = [
 ];
 
 /** A character repeated six times in a row, or a word repeated four times, is a loop, not speech. */
-const RUNAWAY = [/(?<ch>.)\k<ch>{5,}/u, /\b(?<w>\S+)(?:\s+\k<w>\b){3,}/iu];
+const RUNAWAY = [
+  /(?:a+h+a+h*\s*\p{Extended_Pictographic}?\s*){4,}/iu,
+  /(?<ch>.)\k<ch>{5,}/u,
+  /\b(?<w>\S+)(?:\s+\k<w>\b){3,}/iu,
+];
 
 export const noExplicit: ReplyGuard = (text) =>
   !BLOCKED.some((pattern) => pattern.test(text));
