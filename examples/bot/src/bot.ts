@@ -16,6 +16,7 @@ import {
   type DatasetSink,
   memoryLearningStore,
 } from "./learning";
+import { personalAnswer } from "./personal";
 import { noBrazilian, noExplicit, noRunaway } from "./safety";
 
 export interface BuildBotOptions {
@@ -111,6 +112,19 @@ export async function buildBot(
   });
 
   wiring?.attach(bot);
+
+  // Personal questions are answered from confirmed facts, not generated (see personal.ts).
+  // The override mutates the bot instead of copying it, so live getters such as the prompt stay current.
+  const generated = bot.handle;
+  bot.handle = async (msg) => {
+    const answer =
+      msg.isGroup && !msg.mentionsBot ? undefined : personalAnswer(msg.text);
+    if (answer === undefined) {
+      return generated(msg);
+    }
+    await opts.channel.send(msg.chatId, answer, msg.id);
+    return { kind: "replied" };
+  };
   return bot;
 }
 
