@@ -22,7 +22,7 @@ import { createLocalModel } from "./local-model";
 import { createGroupMemory } from "./memory/group-recall";
 import { pgGroupStore } from "./memory/group-store";
 import { createPgMemory } from "./memory/pg-memory";
-import { loadPersona } from "./persona-file";
+import { loadPersona, redactorFor } from "./persona-file";
 
 /** How often expired `kv` rows are swept. Reads also ignore expired rows, so this only reclaims space. */
 const SWEEP_EVERY_MS = 10 * 60_000;
@@ -103,6 +103,7 @@ async function main(): Promise<void> {
   const pg = await openPostgres(config.DATABASE_URL, config);
   const groups = await createGroupMemory({
     base: pg.memory,
+    redact: redactorFor(config.PERSONA_FILE),
     store: pg.groups,
   });
   console.log(`[memory] ${groups.index.summaries().length} group(s) loaded`);

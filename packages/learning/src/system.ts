@@ -8,12 +8,7 @@ import type {
 import { computeTopicTags, contextKey, hourBucket } from "@persona/core";
 import { type EngineOptions, LearningEngine } from "./engine";
 import type { Outcome } from "./extract";
-import {
-  computeRepeatScore,
-  computeTone,
-  extractFact,
-  userContent,
-} from "./extract";
+import { computeRepeatScore, computeTone } from "./extract";
 import type { LearningStore } from "./store";
 import { loadLearningState, saveLearningState } from "./store";
 
@@ -68,7 +63,6 @@ export class LearningSystem implements LearningObserver {
 
   recordOutcome(input: OutcomeInput): void {
     const timestamp = Date.now();
-    const userText = userContent(input.msg);
     // persona.stats.medianLen is measured in characters, so the reply is too.
     const stats = input.personaStats ?? this.personaStats;
     const chars = input.replyText?.trim().length ?? 0;
@@ -83,8 +77,10 @@ export class LearningSystem implements LearningObserver {
         : undefined;
     const outcome: Outcome = {
       contextKey: input.contextKey ?? contextKey(input.msg),
-      extractedFact:
-        reply === undefined ? undefined : extractFact(userText, reply),
+      // Never learn a fact from the bot's own reply: that would store invented
+      // answers as facts and feed them back into the prompt. Facts come only from
+      // the persona file and from admins.
+      extractedFact: undefined,
       historyTurns: input.historyTurns,
       hourBucket: input.hourBucket ?? hourBucket(timestamp),
       lengthRatio,

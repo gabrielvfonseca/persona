@@ -99,6 +99,7 @@ export async function buildBot(
       extraRules: [
         "Answer what was actually asked, with real words. Do not reply with laughter alone.",
         "Write in European Portuguese: tu and estás, never você, vc, pra, tmb or bora.",
+        "Never invent personal details: age, city, job, school, family, pets, partner or possessions. If the persona does not state it, say you don't know or change the subject.",
       ],
       maxExchangeChars: 90,
       maxExchanges: config.PROMPT_EXCHANGES,

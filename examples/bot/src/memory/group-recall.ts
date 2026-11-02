@@ -13,7 +13,8 @@ import type { GroupStore } from "./group-store";
  */
 export function withGroupRecall(
   base: MemoryStores,
-  index: GroupIndex
+  index: GroupIndex,
+  redact: (text: string) => string = (text) => text
 ): MemoryStores {
   return {
     ...base,
@@ -33,7 +34,10 @@ export function withGroupRecall(
         seen.add(node.id);
         return true;
       });
-      return merged.slice(0, limit);
+      // Group messages name real people, so they are redacted before they reach a prompt.
+      return merged
+        .slice(0, limit)
+        .map((node) => ({ ...node, text: redact(node.text) }));
     },
   };
 }
@@ -45,6 +49,7 @@ export function withGroupRecall(
 export async function createGroupMemory(opts: {
   base: MemoryStores & { nodes?: Memory["nodes"] | undefined };
   store: GroupStore;
+  redact?: (text: string) => string;
   weights?: RankWeights | undefined;
 }): Promise<{ memory: MemoryStores; index: GroupIndex }> {
   // Postgres-backed memories have no in-memory node index, so the group index gets its own.
@@ -63,5 +68,5 @@ export async function createGroupMemory(opts: {
   for (const { group, records } of loaded) {
     index.add(group, records);
   }
-  return { index, memory: withGroupRecall(opts.base, index) };
+  return { index, memory: withGroupRecall(opts.base, index, opts.redact) };
 }

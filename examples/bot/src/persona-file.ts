@@ -29,6 +29,12 @@ function loadRedactNames(personaPath: string): string[] {
     : [];
 }
 
+/** The same redaction the persona examples get, for group messages used as recall. */
+export function redactorFor(personaPath: string): (text: string) => string {
+  const names = loadRedactNames(personaPath);
+  return (text) => redactText(text, names);
+}
+
 function redactPersona(persona: Persona, names: string[]): Persona {
   if (names.length === 0) {
     return persona;
