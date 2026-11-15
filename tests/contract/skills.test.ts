@@ -96,7 +96,11 @@ describe.each(skills.map((s) => [s.dir, s] as const))(
         const found = loaded.some((mod) => name in mod);
         expect(found, `${name} in ${skill.modules.join(", ")}`).toBe(true);
       }
-    });
+    },
+    // The example-bot modules pull in ggml-node's native bindings, so the
+    // dynamic imports can exceed the 5s default under test-worker concurrency.
+    30_000
+  );
 
     it("resolves every relative markdown link", () => {
       const links = [...skill.text.matchAll(PATTERN_6)].map((m) => m[1] ?? "");

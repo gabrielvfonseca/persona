@@ -254,7 +254,11 @@ export class PgNodeStore {
     if (terms.length === 0) {
       return [];
     }
-    const tsquery = terms.map((t) => `'${t}'`).join(" | ");
+    // Each token is a \p{L}\p{N} run, so it can only contain letters and
+    // digits. Quoting with doubled single-quotes makes it an atomic lexeme
+    // to to_tsquery, so a dangling operator is impossible and OR semantics
+    // (any term may match) are preserved.
+    const tsquery = terms.map((t) => `'${t.replace(/'/gu, "''")}'`).join(" | ");
     const { rows } = await this.pool.query<NodeRow & { score: number }>(
       `SELECT ${NODE_COLUMNS}, ts_rank_cd(tsv, q) AS score
          FROM pg_nodes, to_tsquery('simple', $1) q
